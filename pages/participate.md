@@ -55,8 +55,7 @@ evaluates it. See `solution/submission.py` for a working baseline
 pip install -r requirements.txt
 python tools/setup_data.py --demo          # or the real data, when provided
 BENCHOPT_DATA_HOME=phases/main/input_data/data \
-    benchopt run . -d Bacteria -s submission \
-    -o "gene-expression-nb[training=True]"
+    benchopt run benchmark -d Bacteria -s submission
 ```
 
 The number you get locally on the public split is the number the leaderboard
@@ -65,5 +64,5 @@ shows — the benchmark you run *is* the benchmark the server runs.
 ## Ideas to improve the baseline
 
 Richer promoter representations (k-mers, learned sequence encoders), more
-experimental metadata, a neural network (`solvers/baseline_nn.py`), or
+experimental metadata, a neural network (`benchmark/solvers/baseline_nn.py`), or
 architectures that model gene × condition interactions.

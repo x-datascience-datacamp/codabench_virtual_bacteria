@@ -12,9 +12,8 @@ split into ``near`` / ``far`` groups). Metrics are emitted per subset as
 ``objective_<metric>_<subset>``; the phase config maps them to leaderboard
 keys and hides the private columns.
 
-Training is opt-in via the ``training`` parameter: a plain ``benchopt run`` is
-inference-only (``train_df=None``), the competition phase selects
-``Objective[training=True]`` so the solver's ``fit`` runs on the platform.
+The solver always trains on the platform: ``get_objective`` hands it the
+train data and resources, and its ``fit`` runs before evaluation.
 """
 
 from benchopt import BaseObjective
@@ -35,12 +34,6 @@ class Objective(BaseObjective):
     # Each solver runs once to completion (no convergence curve).
     sampling_strategy = "run_once"
 
-    # Inference-only by default; the competition phase selects training=True.
-    parameters = {"training": [False]}
-
-    # ``benchopt test`` exercises the full contract, training included.
-    test_config = {"training": True}
-
     def set_data(self, train_df, samples_df, genomes_dir, test_sets, **meta):
         # test_sets: ordered dict ``name -> (features_df, counts_array)``;
         # the counts stay here so the objective owns evaluation.
@@ -50,16 +43,11 @@ class Objective(BaseObjective):
         self.test_sets = test_sets
         self.meta = meta
 
-    def skip(self, train_df=None, **data):
-        if self.training and train_df is None:
-            return True, "training=True needs a dataset with a train split"
-        return False, None
-
     def get_objective(self):
-        # Train data + resources go to the solver (only when training); the
-        # test frames and all counts stay here.
+        # Train data + resources go to the solver; the test frames and all
+        # counts stay here.
         return dict(
-            train_df=self.train_df if self.training else None,
+            train_df=self.train_df,
             samples_df=self.samples_df,
             genomes_dir=self.genomes_dir,
             **self.meta,

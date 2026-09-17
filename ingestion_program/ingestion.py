@@ -2,25 +2,24 @@
 
 A thin wrapper around ``benchopt run``. A submission is a benchopt solver:
 ``submission.py`` (a ``GeneCompetSolver``) plus any extra files it ships.
-This program copies the benchmark the phase ships (``<input_data>/benchmark``)
-to a writable workdir, drops in the submission solver(s), then execs::
+This program copies the benchmark (baked into the image at
+``/compet/benchmark``) to a writable workdir, drops in the submission
+solver(s), then execs::
 
     benchopt run <workdir> --config <input_data>/config.yaml -s <solver> \
         -r 1 --no-cache --no-plot --output submission
 
 The phase ``config.yaml`` is a **native benchopt run config** (``dataset``,
-``objective``, ``seed``, ``no_timeout``, ...) plus one competition-only key
-stripped before the run (benchopt rejects unknown options): ``scoring``
-(parsed by scoring.py — the config is forwarded with the raw results parquet;
-all evaluation happens in the objective). The data location is the image's
-$BENCHOPT_DATA_HOME (/app/data, where the compute worker mounts the staged
-data read-only). The competition phase config selects
-``<objective>[training=True]`` so the solver trains on the platform.
-$BENCHOPT_DEBUG ensures any solver error aborts the run.
+``seed``, ``no_timeout``, ...) plus one competition-only key stripped before
+the run (benchopt rejects unknown options): ``scoring`` (parsed by scoring.py
+— the config is forwarded with the raw results parquet; all evaluation happens
+in the objective, which always trains the solver). The data location is the
+image's $BENCHOPT_DATA_HOME (/app/data, where the compute worker mounts the
+staged data read-only). $BENCHOPT_DEBUG ensures any solver error aborts the
+run.
 """
 
 import os
-import sys
 from pathlib import Path
 
 os.environ["BENCHOPT_DEBUG"] = "true"
@@ -28,7 +27,7 @@ os.environ["BENCHOPT_DEBUG"] = "true"
 os.environ.setdefault("SCIPY_ARRAY_API", "1")
 
 import argparse  # noqa: E402
-import importlib.util  # noqa: E402
+import ast  # noqa: E402
 import json  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
@@ -43,73 +42,55 @@ IGNORE = shutil.ignore_patterns(
 )
 
 
-def setup_workdir(benchmark_dir, input_dir):
-    """Writable benchmark copy + the phase's dataset files."""
-    workdir = Path(tempfile.mkdtemp(prefix="compet_run_")) / "benchmark"
-    shutil.copytree(benchmark_dir, workdir, ignore=IGNORE)
-    for path in sorted((input_dir / "datasets").glob("*.py")):
-        shutil.copyfile(path, workdir / "datasets" / path.name)
-    return workdir
+def _solver_name(path):
+    """The ``name`` of a top-level ``class Solver`` in *path*, read via ast.
+
+    Static parsing avoids importing (executing) the submission here; benchopt
+    imports it during the run.
+    """
+    for node in ast.parse(path.read_text()).body:
+        if isinstance(node, ast.ClassDef) and node.name == "Solver":
+            for stmt in node.body:
+                if (isinstance(stmt, ast.Assign)
+                        and any(getattr(t, "id", None) == "name"
+                                for t in stmt.targets)
+                        and isinstance(stmt.value, ast.Constant)):
+                    return stmt.value.value
+    return None
 
 
 def install_submission_solvers(submission_dir, workdir):
     """Copy the submission's Solver files into the benchmark; return names."""
-    sys.path.insert(0, str(workdir))  # submissions import benchmark_utils
     names = []
     for path in sorted(submission_dir.glob("*.py")):
-        spec = importlib.util.spec_from_file_location(f"_sub_{path.stem}",
-                                                      path)
-        module = importlib.util.module_from_spec(spec)
-        try:
-            spec.loader.exec_module(module)
-        except Exception as e:
-            print(f"[ingestion] skip {path.name}: import failed ({e!r})")
-            continue
-        solver = getattr(module, "Solver", None)
-        if solver is not None and getattr(solver, "name", None):
+        name = _solver_name(path)
+        if name is not None:
             shutil.copyfile(
                 path, workdir / "solvers" / f"_submission_{path.stem}.py")
-            names.append(solver.name)
+            names.append(name)
     if not names:
-        raise SystemExit(f"No `class Solver` found in {submission_dir}.")
+        raise SystemExit(
+            f"No `class Solver` with a `name` found in {submission_dir}.")
     return names
 
 
 def main(submission_dir, output_dir, benchmark_dir, input_dir):
-    # unresolved paths: ``benchmark_dir`` has been through resolve(), which
-    # flattens a dangling link into a plain missing path.
-    if not benchmark_dir.exists():
-        raise SystemExit(
-            f"[ingestion] no benchmark at {benchmark_dir}: the phase bundle "
-            "ships it alongside config.yaml (on Codabench, upload the "
-            "phase's input_data dataset). A bundle copied without "
-            "dereferencing its links lands here too."
-        )
-
-    # Point the solvers at the submission folder (shipped weights).
+    # Point the solvers at the submission folder (shipped extra files).
     os.environ["COMPET_SUBMISSION_DIR"] = str(submission_dir)
-    workdir = setup_workdir(benchmark_dir, input_dir)
+    workdir = Path(tempfile.mkdtemp(prefix="compet_run_")) / "benchmark"
+    shutil.copytree(benchmark_dir, workdir, ignore=IGNORE)
 
-    config, run_config = input_dir / "config.yaml", None
-    if not config.exists():
-        raise SystemExit(
-            f"[ingestion] no phase config at {config} — refusing to run "
-            "every dataset. Provide an input_data dir with a config.yaml "
-            "(on Codabench, upload the phase's input_data dataset)."
-        )
-    cfg = yaml.safe_load(config.read_text()) or {}
-    # benchopt rejects unknown config keys: strip the competition-only
-    # one and pass the rest as a genuine `benchopt run` config file.
+    config = input_dir / "config.yaml"
+    cfg = yaml.safe_load(config.read_text())
+    # benchopt rejects unknown config keys: strip the competition-only one.
     cfg = {k: v for k, v in cfg.items() if k != "scoring"}
-    if cfg:
-        run_config = workdir.parent / "run_config.yml"
-        run_config.write_text(yaml.safe_dump(cfg))
+    run_config = workdir.parent / "run_config.yml"
+    run_config.write_text(yaml.safe_dump(cfg))
 
     cmd = [
         "benchopt", "run", str(workdir),
         "-r", "1", "--no-cache", "--no-plot", "--no-html", "--no-display",
-        "--output", "submission",
-        *(["--config", str(run_config)] if run_config else []),
+        "--output", "submission", "--config", str(run_config),
     ]
     names = install_submission_solvers(submission_dir, workdir)
     for name in names:
@@ -133,15 +114,14 @@ if __name__ == "__main__":
     parser.add_argument("--submission-dir", default="/app/ingested_program")
     parser.add_argument("--output-dir", default="/app/output")
     parser.add_argument("--input-data", default="/app/input_data",
-                        help="Phase dir: benchmark/, config.yaml, datasets/")
-    parser.add_argument("--benchmark-dir",
-                        help="benchopt benchmark (default: the phase's)")
+                        help="Phase dir holding config.yaml")
+    parser.add_argument("--benchmark-dir", default="/compet/benchmark",
+                        help="benchopt benchmark (baked into the image)")
     args = parser.parse_args()
 
-    input_data = Path(args.input_data)
     main(
         Path(args.submission_dir),
         Path(args.output_dir),
-        Path(args.benchmark_dir or input_data / "benchmark").resolve(),
-        input_data,
+        Path(args.benchmark_dir),
+        Path(args.input_data),
     )

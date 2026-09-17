@@ -11,8 +11,6 @@ Usage
 """
 
 import argparse
-import shutil
-import tempfile
 from pathlib import Path
 
 try:
@@ -39,19 +37,8 @@ if __name__ == "__main__":
     client.images.build(path=str(REPO), dockerfile="tools/Dockerfile",
                         tag=image)
 
-    # Assemble the phase input_data (config + benchmark) in a temp dir.
-    work = Path(tempfile.mkdtemp(prefix="run_docker_"))
-    phase = work / "input_data"
-    (phase / "benchmark").mkdir(parents=True)
-    shutil.copyfile(REPO / "phases/main/input_data/config.yaml",
-                    phase / "config.yaml")
-    for item in ["objective.py", "datasets", "solvers", "benchmark_utils",
-                 "test_config.py"]:
-        src = REPO / item
-        dst = phase / "benchmark" / item
-        shutil.copytree(src, dst) if src.is_dir() else shutil.copyfile(src,
-                                                                       dst)
-
+    # The benchmark is baked into the image; the phase only carries config.
+    phase = REPO / "phases/main/input_data"
     out = REPO / "ingestion_res"
     out.mkdir(exist_ok=True)
     print("Running ingestion...")

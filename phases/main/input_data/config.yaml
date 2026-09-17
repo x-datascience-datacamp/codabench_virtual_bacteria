@@ -1,10 +1,7 @@
 # Phase config — a native `benchopt run --config` file plus one competition
 # key (`scoring`) read by the scoring program and stripped by ingestion.
-# The solver trains on the platform (objective training=True).
 dataset:
   - Bacteria
-objective:
-  - gene-expression-nb[training=True]
 seed: 42
 no_timeout: true
 scoring:

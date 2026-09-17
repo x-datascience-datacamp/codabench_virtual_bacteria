@@ -27,11 +27,10 @@ jobs:
       - name: Lint
         run: flake8 . --max-line-length=79 --exclude=.git,worktrees
       - name: benchopt design tests
-        run: benchopt test . --skip-install
+        run: benchopt test benchmark --skip-install
       - name: Smoke run on Simulated
         run: |
-          benchopt run . -d Simulated -s BaselineNN -s Constant \
-            -o "gene-expression-nb[training=True]" \
+          benchopt run benchmark -d Simulated -s BaselineNN -s Constant \
             -r 1 --no-cache --no-plot --no-html --no-display
       - name: Build bundle + end-to-end ingestion + scoring (demo data)
         run: |
@@ -42,7 +41,7 @@ jobs:
           python _bundle/ingestion_program/ingestion.py \
             --submission-dir _bundle/solution \
             --input-data _bundle/main_phase/input_data \
-            --benchmark-dir _bundle/main_phase/input_data/benchmark \
+            --benchmark-dir benchmark \
             --output-dir ingestion_res
           python _bundle/scoring_program/scoring.py \
             --prediction-dir ingestion_res \

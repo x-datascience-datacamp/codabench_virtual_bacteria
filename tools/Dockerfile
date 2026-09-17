@@ -35,9 +35,11 @@ RUN pip install -U pip && pip install --no-cache-dir \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# The programs, for running the platform's evaluation locally.
+# The programs + the benchopt benchmark they run (baked in, so the phase
+# bundle only carries config; an image tag pins the exact evaluation).
 COPY ingestion_program /compet/ingestion_program
 COPY scoring_program /compet/scoring_program
+COPY benchmark /compet/benchmark
 
 # Data is bind-mounted read-only at /app/data by the compute worker; the
 # phase bundle lands on /app/input_data, benchmark included.

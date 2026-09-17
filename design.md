@@ -29,8 +29,8 @@ competition is markedly simpler:
 
 - **No multi-track machinery.** compet-eeg is 4 competitions in a monorepo
   (`tracks/<t>/…`, per-track bundles/pages/solutions). We have **one task** →
-  one benchmark at the repo root, **no `track` objective parameter**, plain
-  metric keys, one `competition.yaml`, one bundle.
+  one benchmark in a dedicated `benchmark/` folder, **no `track` objective
+  parameter**, plain metric keys, one `competition.yaml`, one bundle.
 - **No neuralbench/neuralset data stack.** compet-eeg's `nb_task.py` wraps
   neuralbench task configs, exca cluster infra, lazy EEG segmenters, one-hot
   target transforms, channel-map plumbing — hundreds of lines. Our data is
@@ -48,11 +48,11 @@ results-parquet **scoring**, the `CompetSolver` **contract**, the phase
 | # | Fork | Choice | Consequence |
 |---|---|---|---|
 | — | **Everything in a benchopt layer** | Yes | The benchmark *is* the competition; ingestion is a thin `benchopt run` wrapper; the metric lives in the Objective. |
-| 1 | Platform trains? | **Yes — train on platform** | Submission is *code* (a benchopt Solver) that engineers features + trains. Expressed as the objective's `training` parameter, selected by the phase config (`Objective[training=True]`). Local `benchopt run` default stays inference-only for cheap tests. |
+| 1 | Platform trains? | **Yes — always train on platform** | Submission is *code* (a benchopt Solver) that engineers features + trains. The objective always hands the solver the train data and its `fit` always runs (no `training` toggle — locally and on the server we always train). |
 | 2 | Phases | **Single phase, public + private columns** | One window, one leaderboard. Public metric shown live; private metric a `hidden: True` column used for the final rank. No switchover. Upgrade path: a sealed final phase (see Risks). |
 | 3 | Metric location | **In the Objective** (`evaluate_result`) | `objective_*` columns land in the results parquet; the scoring program only maps columns → leaderboard keys. Participants get the exact number from a local `benchopt run`. |
 | 4 | Workers | **Self-hosted GPU** | Deep sequence models (CNN/transformer promoter encoders) allowed; staged data mounted read-only. |
-| 5 | Benchmark location | **Phase bundle** (image carries env only) | One image serves the phase; the benchmark travels in `input_data/benchmark/`. `create_bundle.py` must dereference symlinks. |
+| 5 | Benchmark location | **Baked into the image** (`/compet/benchmark`) | Single track, single image: an image tag pins the exact evaluation, ingestion always resolves the benchmark, and the bundle carries only config + wrapper + pages. Updating the benchmark means an image rebuild. |
 | 6 | Environment | **Frozen image** (pinned `requirements.txt`) | No install at submission time; a new dep = an image release. |
 
 Data status: **multi-species data assembled** (on the microbiologists' side, not
@@ -98,29 +98,29 @@ must hold:
 
 ## Target layout (single-track distillation of neural-compet)
 
+The benchopt benchmark lives in a dedicated `benchmark/` folder (clear
+separation from the Codabench wrapper); the wrapper sits at the repo root.
+
 ```
-objective.py                         # Objective: NB-NLL + MAE/R² on public & private (near/far); `training` param; get_one_result = constant baseline
-datasets/
-  simulated.py                       # zero-dep smoke test (fake counts, tiny fake genome) — powers `benchopt run -d Simulated` + `benchopt test`
-  bacteria.py                        # real: loads pre-split tables + samples + genomes; subset={public,private,full}; hands solver train+resources, keeps test counts
-solvers/
-  baseline_nn.py                     # the notebook baseline as a GeneCompetSolver (promoter composition + metadata → (μ,σ) MLP)
-  constant.py                        # trivial floor (predict mean log-count, fixed σ)
-test_config.py                       # CI hooks: test_config={"training":True}; skip heavy installs
-benchmark_utils/
-  __init__.py                        # empty; one module per concern
-  base_solver.py                     # GeneCompetSolver contract (fit / predict / optional save_model)
-  nb_loss.py                         # Negative-Binomial NLL + MAE/R² on log1p — the metric (numpy)
-  features.py                        # shared promoter extraction from coords + sequence encoders (Biopython)
-  data.py                            # frame loaders, device helpers
-codabench/
-  competition.yaml                   # single phase, hidden private column, self-hosted GPU docker_image
-  ingestion_program/{ingestion.py,metadata.yaml}   # thin `benchopt run` wrapper — reuse neural-compet verbatim
-  scoring_program/{scoring.py,metadata.yaml}        # results.parquet → scores.json — reuse verbatim
-  phases/
-    main/gene_expression/config.yaml # dataset: Bacteria; objective: Objective[training=True]; scoring.columns map
-    reference_data/README.md
-  pages/{competition.html,participate.md,timeline.md,terms.md}
+benchmark/                           # the benchopt benchmark — `benchopt run benchmark`
+  objective.py                       # Objective: NB-NLL + MAE/R² on public & private (near/far); always trains; get_one_result = constant baseline
+  datasets/
+    simulated.py                     # zero-dep smoke test — powers `benchopt run benchmark -d Simulated` + `benchopt test`
+    bacteria.py                      # real: loads pre-split tables + samples + genomes; hands solver train+resources, keeps test counts
+  solvers/
+    baseline_nn.py                   # notebook baseline as a GeneCompetSolver (promoter composition + metadata → (μ,σ) MLP)
+    constant.py                      # trivial floor (predict mean count, calibrated σ)
+  test_config.py                     # CI hook: skip Bacteria (no data in CI)
+  benchmark_utils/
+    base_solver.py                   # GeneCompetSolver contract (get_model / fit; model.predict)
+    nb_loss.py                       # Negative-Binomial NLL + MAE/R² on log1p — the metric
+    baselines.py, features.py        # constant model; promoter extraction + tabular preprocessing (Biopython/sklearn)
+competition.yaml                     # single phase, hidden private columns, self-hosted GPU docker_image
+ingestion_program/{ingestion.py,metadata.yaml}   # thin `benchopt run` wrapper (benchmark from the image)
+scoring_program/{scoring.py,metadata.yaml}        # results.parquet → scores.json
+phases/main/input_data/config.yaml   # dataset: Bacteria; scoring.columns map
+phases/reference_data/README.md
+pages/{participate.md,timeline.md,terms.md}
 solution/submission.py               # participant-facing baseline (a GeneCompetSolver)
 tools/{Dockerfile,requirements.txt,create_bundle.py,setup_data.py,run_docker.py}
 ```
@@ -135,14 +135,13 @@ tools/{Dockerfile,requirements.txt,create_bundle.py,setup_data.py,run_docker.py}
   `public_test_df`, `public_counts`, `private_test_df`, `private_counts`
   (+ `private_group` near/far), `meta`.
 - **`Objective.get_objective()`** hands the solver `train_df`, `samples_df`,
-  `genomes_dir`, `meta` — **and only when `training=True`** (else `train_df=None`,
-  inference-only). Test frames and all counts stay in the objective.
-- **`GeneCompetSolver`** (in `benchmark_utils/base_solver.py`):
-  - `fit(self, train_df, samples_df, genomes_dir, meta)` — feature engineering +
-    model training (runs only under `training=True`).
+  `genomes_dir`, `meta`. Test frames and all counts stay in the objective.
+- **`GeneCompetSolver`** (in `benchmark/benchmark_utils/base_solver.py`):
+  - `get_model(self, meta)` — build the untrained model.
+  - `fit(self, model, train_df, samples_df, genomes_dir)` — feature engineering
+    + training (always runs, on the platform).
   - the returned model exposes
     `predict(test_df, samples_df, genomes_dir) -> np.ndarray (N, 2)` = (μ, σ).
-  - optional `save_model` for shipping weights.
 - **`Objective.evaluate_result(model)`** — for each of {public, private_near,
   private_far}: `preds = model.predict(subset_df, samples_df, genomes_dir)`;
   compute NB-NLL + MAE + R² vs the kept counts. Fails loudly on wrong row count,
@@ -151,7 +150,6 @@ tools/{Dockerfile,requirements.txt,create_bundle.py,setup_data.py,run_docker.py}
 - **Phase `config.yaml`** (native benchopt run config + one `scoring` key):
   ```yaml
   dataset: [Bacteria]
-  objective: Objective[training=True]
   seed: 42
   no_timeout: true
   scoring:
@@ -190,7 +188,7 @@ tools/{Dockerfile,requirements.txt,create_bundle.py,setup_data.py,run_docker.py}
 `TRAIN/NEAR/FAR_SPECIES` in `tools/setup_data.py`, confirm the assembled schema
 matches the notebook columns (esp. `reference`, `feature_split`,
 `condition_split`, an `ortholog_group` and `study` for the guards), then run
-`python tools/setup_data.py` and validate a real `benchopt run . -d Bacteria`.
+`python tools/setup_data.py` and validate a real `benchopt run benchmark -d Bacteria`.
 
 ## Risks / open points
 
@@ -207,6 +205,6 @@ matches the notebook columns (esp. `reference`, `feature_split`,
   confirm the assembled multi-species tables match (esp. `reference` values,
   `feature_split`/`condition_split`, ortholog-group id for guard 1).
 - **benchopt as the local dev loop.** Ship the starting kit so students run the
-  exact server benchmark locally (`benchopt run . -d Bacteria -o
-  "Objective[training=True]" -s <their solver>`) — the one-code-path invariant.
+  exact server benchmark locally (`benchopt run benchmark -d Bacteria
+  -s <their solver>`) — the one-code-path invariant.
 ```

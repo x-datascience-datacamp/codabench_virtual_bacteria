@@ -1,11 +1,12 @@
 """Build the Codabench bundle for the gene-expression competition.
 
 The bundle ships the competition config, the pages, the sample submission, the
-ingestion/scoring programs, and the phase directory as ``main_phase`` — the
-phase config plus the benchopt benchmark it runs (``benchmark/``, with
-``benchmark_utils`` inside it). The data is NOT bundled: it is staged onto the
-compute worker at ``$BENCHOPT_DATA_HOME`` (``/app/data``), which keeps the
-sealed private split out of the public artifact.
+ingestion/scoring programs, and the phase directory as ``main_phase`` (just the
+phase ``config.yaml`` + reference placeholder). The benchopt **benchmark** is
+baked into the Docker image (``/compet/benchmark``), not the bundle; the
+**data** is staged onto the compute worker at ``$BENCHOPT_DATA_HOME``
+(``/app/data``), which keeps the sealed private split out of the public
+artifact.
 
 Usage
 -----
@@ -17,10 +18,6 @@ import zipfile
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-
-# Repo-root files that make up the benchopt benchmark.
-BENCHMARK_ITEMS = ["objective.py", "datasets", "solvers", "benchmark_utils",
-                   "test_config.py"]
 
 # Skip benchopt run artefacts / caches / staged data when zipping.
 _SKIP_PARTS = ("outputs", "__cache__", "__pycache__", ".pytest_cache", "data")
@@ -62,16 +59,8 @@ def build_bundle():
         _add_dir(bundle, ROOT_DIR / "scoring_program", "scoring_program")
         _add_dir(bundle, ROOT_DIR / "solution", "solution")
 
-        # Phase: config + the benchmark it runs (benchmark_utils inside).
         _add_file(bundle, ROOT_DIR / "phases/main/input_data/config.yaml",
                   "main_phase/input_data/config.yaml")
-        for item in BENCHMARK_ITEMS:
-            src = ROOT_DIR / item
-            arc = f"main_phase/input_data/benchmark/{item}"
-            if src.is_dir():
-                _add_dir(bundle, src, arc)
-            else:
-                _add_file(bundle, src, arc)
         _add_dir(bundle, ROOT_DIR / "phases/reference_data",
                  "main_phase/reference_data")
     print(f"-> {out.name}")

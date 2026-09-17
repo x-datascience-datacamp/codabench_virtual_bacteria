@@ -7,12 +7,9 @@ PyTorch — no benchopt internals required. They implement:
 - ``get_model(self, meta)`` -> model (required). Build the (untrained) model.
   ``meta["submission_dir"]`` points at the submission folder if you ship extra
   files (precomputed tables, weights).
-- ``fit(self, model, train_df, samples_df, genomes_dir)`` (required for the
-  competition). Engineer features from the three data sources and train.
-  Runs only when the objective's ``training`` parameter is selected — which
-  the competition phase config does (``Objective[training=True]``). A plain
-  local ``benchopt run`` is inference-only (``train_df=None``), mirroring a
-  server that only runs prediction.
+- ``fit(self, model, train_df, samples_df, genomes_dir)`` (required). Engineer
+  features from the three data sources and train the model. It runs on the
+  platform before evaluation.
 
 The trained model must expose::
 
@@ -22,8 +19,8 @@ with columns ``(mu, sigma)`` — see ``benchmark_utils.nb_loss``. The objective
 calls it on the held-out test frames (features only; counts stay hidden).
 
 ``meta`` is a plain dict: the feature-column hints (``numeric_features``,
-``categorical_features``), ``device``, ``submission_dir``. The three data
-sources are pandas DataFrames / a genomes directory path:
+``categorical_features``), ``submission_dir``. The three data sources are
+pandas DataFrames / a genomes directory path:
 
 - ``train_df`` / ``test_df`` : one row per (gene x sample) observation;
 - ``samples_df``            : experimental metadata, join key ``Run``
@@ -52,8 +49,6 @@ class GeneCompetSolver(BaseSolver):
     sampling_strategy = "run_once"
 
     def set_objective(self, train_df, samples_df, genomes_dir, **meta):
-        # train_df is None on inference-only runs (objective training=False);
-        # the solver discovers it can train from the argument, not a flag.
         self.train_df = train_df
         self.samples_df = samples_df
         self.genomes_dir = Path(genomes_dir) if genomes_dir is not None \
@@ -67,9 +62,8 @@ class GeneCompetSolver(BaseSolver):
         self.model = self.get_model(self.meta)
 
     def run(self, _):
-        if self.train_df is not None:
-            self.fit(self.model, self.train_df, self.samples_df,
-                     self.genomes_dir)
+        self.fit(self.model, self.train_df, self.samples_df,
+                 self.genomes_dir)
 
     def get_result(self):
         return dict(model=self.model)

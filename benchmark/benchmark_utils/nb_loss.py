@@ -11,39 +11,36 @@ MAE and R^2 on ``log1p(counts)`` are reported alongside for interpretability.
 """
 
 import numpy as np
-from scipy.special import gammaln
+from scipy.stats import nbinom
+from sklearn.metrics import mean_absolute_error, r2_score
 
 _EPS = 1e-8
 
 
 def nb_nll(counts, mu, sigma):
-    """Mean Negative-Binomial negative log-likelihood (lower is better)."""
+    """Mean Negative-Binomial negative log-likelihood (lower is better).
+
+    ``scipy.stats.nbinom(n=r, p=r/(r+mu))`` is the NB with mean ``mu`` and
+    size (dispersion) ``r``.
+    """
     y = np.asarray(counts, dtype=np.float64)
     mu = np.clip(np.asarray(mu, dtype=np.float64), _EPS, None)
     r = np.clip(np.asarray(sigma, dtype=np.float64), _EPS, None)
-    # log-likelihood of NB(mean=mu, size=r):
-    #   lgamma(y+r) - lgamma(r) - lgamma(y+1)
-    #   + r*log(r/(r+mu)) + y*log(mu/(r+mu))
-    log_denom = np.log(r + mu)
-    ll = (gammaln(y + r) - gammaln(r) - gammaln(y + 1.0)
-          + r * (np.log(r) - log_denom) + y * (np.log(mu) - log_denom))
-    return float(-np.mean(ll))
+    return float(-np.mean(nbinom.logpmf(y, r, r / (r + mu))))
 
 
 def log_mae(counts, mu):
     """Mean absolute error on ``log1p(counts)``."""
-    y = np.asarray(counts, dtype=np.float64)
-    mu = np.clip(np.asarray(mu, dtype=np.float64), 0.0, None)
-    return float(np.mean(np.abs(np.log1p(y) - np.log1p(mu))))
+    y = np.log1p(np.asarray(counts, dtype=np.float64))
+    p = np.log1p(np.clip(np.asarray(mu, dtype=np.float64), 0.0, None))
+    return float(mean_absolute_error(y, p))
 
 
 def log_r2(counts, mu):
-    """R^2 on ``log1p(counts)`` (0 when the target has no variance)."""
+    """R^2 on ``log1p(counts)``."""
     y = np.log1p(np.asarray(counts, dtype=np.float64))
     p = np.log1p(np.clip(np.asarray(mu, dtype=np.float64), 0.0, None))
-    ss_res = float(np.sum((y - p) ** 2))
-    ss_tot = float(np.sum((y - y.mean()) ** 2))
-    return 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    return float(r2_score(y, p))
 
 
 def check_predictions(preds, n):

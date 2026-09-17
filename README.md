@@ -9,19 +9,20 @@ to **generalize to held-out bacterial species**.
 See [`design.md`](design.md) for the full design and decision record, and
 `gene_expression_getting_started.ipynb` for an end-to-end walkthrough.
 
-## The benchmark (repo root)
+## The benchmark (`benchmark/`)
 
-Standard benchopt layout — run it directly with `benchopt run .`:
+The self-contained benchopt benchmark — run it directly with
+`benchopt run benchmark`:
 
-- `objective.py` — the task + metric (Negative-Binomial NLL, MAE/R²) on the
-  public and hidden private (near/far species) splits.
-- `datasets/` — `simulated.py` (zero-dependency smoke test) and `bacteria.py`
-  (loads the staged real data).
-- `solvers/` — `constant.py` (leaderboard floor), `baseline_nn.py` (NN).
-- `benchmark_utils/` — the metric, the `GeneCompetSolver` submission contract,
-  feature engineering, shared helpers.
+- `benchmark/objective.py` — the task + metric (Negative-Binomial NLL, MAE/R²)
+  on the public and hidden private (near/far species) splits; always trains.
+- `benchmark/datasets/` — `simulated.py` (zero-dependency smoke test) and
+  `bacteria.py` (loads the staged real data).
+- `benchmark/solvers/` — `constant.py` (floor), `baseline_nn.py` (NN).
+- `benchmark/benchmark_utils/` — the metric, the `GeneCompetSolver` submission
+  contract, feature engineering, shared helpers.
 
-## The competition wrapper
+## The competition wrapper (repo root)
 
 - `competition.yaml` — the single-phase competition (public columns +
   hidden private columns).
@@ -44,12 +45,11 @@ python tools/setup_data.py --demo
 
 # 2. run the benchmark exactly as the platform does
 BENCHOPT_DATA_HOME=phases/main/input_data/data \
-    benchopt run . -d Bacteria -s submission \
-    -o "gene-expression-nb[training=True]"
+    benchopt run benchmark -d Bacteria -s submission
 
 # design-level tests + zero-dependency smoke test
-benchopt test . --skip-install
-benchopt run . -d Simulated -s Constant -o "gene-expression-nb[training=True]"
+benchopt test benchmark --skip-install
+benchopt run benchmark -d Simulated -s Constant
 ```
 
 ## Build the Codabench bundle
@@ -58,8 +58,9 @@ benchopt run . -d Simulated -s Constant -o "gene-expression-nb[training=True]"
 python tools/create_bundle.py     # -> bundle.zip (upload to Codabench)
 ```
 
-The bundle ships the benchmark + config + programs. The **data** (including the
+The bundle ships only the config + programs + pages. The **benchmark** is baked
+into the Docker image (`/compet/benchmark`), and the **data** (including the
 sealed private split) is staged separately onto the compute worker at
-`$BENCHOPT_DATA_HOME` (`/app/data`), so it never enters the public artifact.
+`$BENCHOPT_DATA_HOME` (`/app/data`), so neither enters the public artifact.
 Fill in `tools/setup_data.py::load_raw` and the `TRAIN/NEAR/FAR_SPECIES` lists
 to build the real split from the assembled multi-species data.

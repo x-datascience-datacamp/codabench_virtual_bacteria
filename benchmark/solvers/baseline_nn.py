@@ -14,9 +14,12 @@ import torch.nn.functional as F
 from scipy.optimize import minimize_scalar
 
 from benchmark_utils.base_solver import GeneCompetSolver
-from benchmark_utils.data import get_device
 from benchmark_utils.features import FeatureBuilder
 from benchmark_utils.nb_loss import nb_nll
+
+
+def _device():
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class CountNet(nn.Module):
@@ -110,7 +113,7 @@ class Solver(GeneCompetSolver):
     def get_model(self, meta):
         return NBModel(
             meta["numeric_features"], meta["categorical_features"],
-            self.n_epochs, self.lr, self.hidden, get_device(),
+            self.n_epochs, self.lr, self.hidden, _device(),
         )
 
     def fit(self, model, train_df, samples_df, genomes_dir):
