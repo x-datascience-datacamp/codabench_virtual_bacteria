@@ -22,7 +22,7 @@ jobs:
           cache: pip
       - name: Install
         run: |
-          pip install -U pip flake8
+          pip install -U pip flake8 pytest
           pip install -r requirements.txt
       - name: Lint
         run: flake8 . --max-line-length=79 --exclude=.git,worktrees
@@ -54,14 +54,19 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build image
+      - name: Build image (CPU torch, build-only)
         uses: docker/build-push-action@v6
         with:
           file: ./tools/Dockerfile
           push: false
-          load: true
+          load: false
+          build-args: TORCH_CHANNEL=cpu
           tags: bacteria-compet-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
