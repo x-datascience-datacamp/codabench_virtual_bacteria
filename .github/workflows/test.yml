@@ -30,7 +30,7 @@ jobs:
         run: benchopt test . --skip-install
       - name: Smoke run on Simulated
         run: |
-          benchopt run . -d Simulated -s submission -s Constant \
+          benchopt run . -d Simulated -s BaselineNN -s Constant \
             -o "gene-expression-nb[training=True]" \
             -r 1 --no-cache --no-plot --no-html --no-display
       - name: Build bundle + end-to-end ingestion + scoring (demo data)
