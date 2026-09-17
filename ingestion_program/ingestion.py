@@ -1,92 +1,147 @@
-import json
+"""Ingestion program for the gene-expression competition.
+
+A thin wrapper around ``benchopt run``. A submission is a benchopt solver:
+``submission.py`` (a ``GeneCompetSolver``) plus any extra files it ships.
+This program copies the benchmark the phase ships (``<input_data>/benchmark``)
+to a writable workdir, drops in the submission solver(s), then execs::
+
+    benchopt run <workdir> --config <input_data>/config.yaml -s <solver> \
+        -r 1 --no-cache --no-plot --output submission
+
+The phase ``config.yaml`` is a **native benchopt run config** (``dataset``,
+``objective``, ``seed``, ``no_timeout``, ...) plus one competition-only key
+stripped before the run (benchopt rejects unknown options): ``scoring``
+(parsed by scoring.py — the config is forwarded with the raw results parquet;
+all evaluation happens in the objective). The data location is the image's
+$BENCHOPT_DATA_HOME (/app/data, where the compute worker mounts the staged
+data read-only). The competition phase config selects
+``<objective>[training=True]`` so the solver trains on the platform.
+$BENCHOPT_DEBUG ensures any solver error aborts the run.
+"""
+
+import os
 import sys
-import time
 from pathlib import Path
 
-import pandas as pd
+os.environ["BENCHOPT_DEBUG"] = "true"
+# scikit-learn array-API dispatch needs scipy's, read at scipy import time.
+os.environ.setdefault("SCIPY_ARRAY_API", "1")
+
+import argparse  # noqa: E402
+import importlib.util  # noqa: E402
+import json  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+import time  # noqa: E402
+
+import yaml  # noqa: E402
+
+# benchopt artefacts + downloaded data, never copied to the workdir.
+IGNORE = shutil.ignore_patterns(
+    "outputs", "__cache__", "__pycache__", ".pytest_cache", "data"
+)
 
 
-EVAL_SETS = ["test", "private_test"]
+def setup_workdir(benchmark_dir, input_dir):
+    """Writable benchmark copy + the phase's dataset files."""
+    workdir = Path(tempfile.mkdtemp(prefix="compet_run_")) / "benchmark"
+    shutil.copytree(benchmark_dir, workdir, ignore=IGNORE)
+    for path in sorted((input_dir / "datasets").glob("*.py")):
+        shutil.copyfile(path, workdir / "datasets" / path.name)
+    return workdir
 
 
-def evaluate_model(model, X_test):
+def install_submission_solvers(submission_dir, workdir):
+    """Copy the submission's Solver files into the benchmark; return names."""
+    sys.path.insert(0, str(workdir))  # submissions import benchmark_utils
+    names = []
+    for path in sorted(submission_dir.glob("*.py")):
+        spec = importlib.util.spec_from_file_location(f"_sub_{path.stem}",
+                                                      path)
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as e:
+            print(f"[ingestion] skip {path.name}: import failed ({e!r})")
+            continue
+        solver = getattr(module, "Solver", None)
+        if solver is not None and getattr(solver, "name", None):
+            shutil.copyfile(
+                path, workdir / "solvers" / f"_submission_{path.stem}.py")
+            names.append(solver.name)
+    if not names:
+        raise SystemExit(f"No `class Solver` found in {submission_dir}.")
+    return names
 
-    y_pred = model.predict(X_test)
-    return pd.DataFrame(y_pred)
 
+def main(submission_dir, output_dir, benchmark_dir, input_dir):
+    # unresolved paths: ``benchmark_dir`` has been through resolve(), which
+    # flattens a dangling link into a plain missing path.
+    if not benchmark_dir.exists():
+        raise SystemExit(
+            f"[ingestion] no benchmark at {benchmark_dir}: the phase bundle "
+            "ships it alongside config.yaml (on Codabench, upload the "
+            "phase's input_data dataset). A bundle copied without "
+            "dereferencing its links lands here too."
+        )
 
-def get_train_data(data_dir):
-    data_dir = Path(data_dir)
-    training_dir = data_dir / "train"
-    X_train = pd.read_csv(training_dir / "train_features.csv")
-    y_train = pd.read_csv(training_dir / "train_labels.csv")
-    return X_train, y_train
+    # Point the solvers at the submission folder (shipped weights).
+    os.environ["COMPET_SUBMISSION_DIR"] = str(submission_dir)
+    workdir = setup_workdir(benchmark_dir, input_dir)
 
+    config, run_config = input_dir / "config.yaml", None
+    if not config.exists():
+        raise SystemExit(
+            f"[ingestion] no phase config at {config} — refusing to run "
+            "every dataset. Provide an input_data dir with a config.yaml "
+            "(on Codabench, upload the phase's input_data dataset)."
+        )
+    cfg = yaml.safe_load(config.read_text()) or {}
+    # benchopt rejects unknown config keys: strip the competition-only
+    # one and pass the rest as a genuine `benchopt run` config file.
+    cfg = {k: v for k, v in cfg.items() if k != "scoring"}
+    if cfg:
+        run_config = workdir.parent / "run_config.yml"
+        run_config.write_text(yaml.safe_dump(cfg))
 
-def main(data_dir, output_dir):
-    # Here, you can import info from the submission module, to evaluate the
-    # submission
-    from submission import get_model
+    cmd = [
+        "benchopt", "run", str(workdir),
+        "-r", "1", "--no-cache", "--no-plot", "--no-html", "--no-display",
+        "--output", "submission",
+        *(["--config", str(run_config)] if run_config else []),
+    ]
+    names = install_submission_solvers(submission_dir, workdir)
+    for name in names:
+        cmd += ["-s", name]
 
-    X_train, y_train = get_train_data(data_dir)
-
-    print("Training the model")
-
-    model = get_model()
-
+    print(f"[ingestion] evaluating {', '.join(names)}", flush=True)
     start = time.time()
-    model.fit(X_train, y_train)
-    train_time = time.time() - start
-    print("-" * 10)
-    print("Evaluate the model")
-    start = time.time()
-    res = {}
-    for eval_set in EVAL_SETS:
-        X_test = pd.read_csv(data_dir / eval_set / f"{eval_set}_features.csv")
-        res[eval_set] = evaluate_model(model, X_test)
-    test_time = time.time() - start
-    print("-" * 10)
-    duration = train_time + test_time
-    print(f"Completed Prediction. Total duration: {duration}")
+    subprocess.run(cmd, check=True)
 
-    # Write output files
+    # Raw results + config for the scoring program, which only parses them.
     output_dir.mkdir(parents=True, exist_ok=True)
-    with open(output_dir / "metadata.json", "w+") as f:
-        json.dump(dict(train_time=train_time, test_time=test_time), f)
-    for eval_set in EVAL_SETS:
-        filepath = output_dir / f"{eval_set}_predictions.csv"
-        res[eval_set].to_csv(filepath, index=False)
-    print()
-    print("Ingestion Program finished. Moving on to scoring")
+    result_file = max((workdir / "outputs").glob("submission*.parquet"))
+    shutil.copyfile(result_file, output_dir / "results.parquet")
+    (output_dir / "metadata.json").write_text(
+        json.dumps({"duration": time.time() - start}))
+    shutil.copyfile(config, output_dir / "config.yaml")
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Ingestion program for codabench"
-    )
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        default="/app/input_data",
-        help="",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="/app/output",
-        help="",
-    )
-    parser.add_argument(
-        "--submission-dir",
-        type=str,
-        default="/app/ingested_program",
-        help="",
-    )
-
+    parser = argparse.ArgumentParser(description="Competition ingestion")
+    parser.add_argument("--submission-dir", default="/app/ingested_program")
+    parser.add_argument("--output-dir", default="/app/output")
+    parser.add_argument("--input-data", default="/app/input_data",
+                        help="Phase dir: benchmark/, config.yaml, datasets/")
+    parser.add_argument("--benchmark-dir",
+                        help="benchopt benchmark (default: the phase's)")
     args = parser.parse_args()
-    sys.path.append(args.submission_dir)
-    sys.path.append(Path(__file__).parent.resolve())
 
-    main(Path(args.data_dir), Path(args.output_dir))
+    input_data = Path(args.input_data)
+    main(
+        Path(args.submission_dir),
+        Path(args.output_dir),
+        Path(args.benchmark_dir or input_data / "benchmark").resolve(),
+        input_data,
+    )

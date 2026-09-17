@@ -1,2 +1,17 @@
+# Dependencies for the ingestion + scoring programs and every submission
+# (the Codabench worker / Docker image). The ingestion program runs the
+# bundled benchopt benchmark on the submission, so it needs benchopt plus
+# everything the benchmark and submissions import at run time. This is the
+# participants' dependency contract: no install happens at submission time.
+# main tarball (not git+https: the docker image has no git) until the
+# benchopt features used here — objective/dataset in the run config,
+# --no-html, min_benchopt_version 1.9.2 — are on PyPI.
+benchopt @ https://github.com/benchopt/benchopt/archive/refs/heads/main.tar.gz
+numpy
+scipy
 pandas
 scikit-learn
+biopython
+# torch comes from the PyTorch wheel index in tools/Dockerfile (CUDA build);
+# listed here for local installs / the dependency contract.
+torch

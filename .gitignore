@@ -1,8 +1,18 @@
 *.csv
 .DS_Store
 *.pyc
+__pycache__/
 *.xml
 *.zip
 ingestion_res/*
 scoring_res/*
 dev_phase/*
+outputs/
+__cache__/
+.pytest_cache/
+# generated phase data (written by tools/setup_data.py)
+phases/**/input_data/data/
+ingestion_res/
+scoring_res/
+_bundle/
+.claude/

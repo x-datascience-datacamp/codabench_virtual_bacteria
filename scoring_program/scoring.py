@@ -1,72 +1,63 @@
+"""Scoring program for the gene-expression competition.
+
+All evaluation happens in the ingestion run; this only parses the raw
+benchopt results (``results.parquet``) into the flat ``scores.json`` the
+leaderboard consumes. The forwarded phase config's ``scoring.columns`` maps
+leaderboard keys to dataframe columns; a listed column that is missing or
+NaN fails loudly. Without a config, every float-valued ``objective_<m>``
+column becomes a score (integer columns are context, e.g. ``n_classes``).
+"""
+
 import json
+import math
 from pathlib import Path
 
-import pandas as pd
+import numpy as np
+import yaml
 
-EVAL_SETS = ["test", "private_test"]
-
-
-def compute_accuracy(predictions, targets):
-    # Make sure there is no NaN, as pandas ignores them in mean computation
-    predictions = predictions.fillna(-10).values
-    # Return mean of correct predictions
-    return (predictions == targets.values).mean()
+# Context columns that are never scores, whatever their dtype.
+CONTEXT = {"objective_name", "objective_value"}
 
 
-def main(reference_dir, prediction_dir, output_dir):
+def main(prediction_dir, output_dir):
+    from benchopt.results import read_results
+
+    df = read_results(prediction_dir / "results.parquet")
+    config_file = prediction_dir / "config.yaml"
+    config = (yaml.safe_load(config_file.read_text())
+              if config_file.exists() else {}) or {}
+
     scores = {}
-    for eval_set in EVAL_SETS:
-        print(f'Scoring {eval_set}')
+    columns = (config.get("scoring") or {}).get("columns")
+    if columns:
+        for key, col in columns.items():
+            value = float(df[col].iloc[0]) if col in df.columns else np.nan
+            if math.isnan(value):
+                raise SystemExit(f"[scoring] column {col!r} (leaderboard "
+                                 f"key {key!r}) is missing or NaN.")
+            scores[key] = value
+    else:  # no config: auto-detect the float metric columns
+        for col in df.columns:
+            if (col.startswith("objective_") and col not in CONTEXT
+                    and np.issubdtype(df[col].dtype, np.floating)
+                    and not math.isnan(value := float(df[col].iloc[0]))):
+                scores[col.removeprefix("objective_")] = value
 
-        predictions = pd.read_csv(
-            prediction_dir / f'{eval_set}_predictions.csv'
-        )
-        targets = pd.read_csv(
-            reference_dir / f'{eval_set}_labels.csv'
-        )
+    meta_file = prediction_dir / "metadata.json"
+    if meta_file.exists():
+        scores["duration"] = json.loads(meta_file.read_text())["duration"]
 
-        scores[eval_set] = float(compute_accuracy(predictions, targets))
-
-    # Add train and test times in the score
-    json_durations = (prediction_dir / 'metadata.json').read_text()
-    durations = json.loads(json_durations)
-    scores.update(**durations)
-    print(scores)
-
-    # Write output scores
     output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / 'scores.json').write_text(json.dumps(scores))
+    (output_dir / "scores.json").write_text(json.dumps(scores))
+    print(json.dumps(scores, indent=2))
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Scoring program for codabench"
-    )
-    parser.add_argument(
-        "--reference-dir",
-        type=str,
-        default="/app/input/ref",
-        help="",
-    )
-    parser.add_argument(
-        "--prediction-dir",
-        type=str,
-        default="/app/input/res",
-        help="",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="/app/output",
-        help="",
-    )
-
+    parser = argparse.ArgumentParser(description="Competition scoring")
+    parser.add_argument("--prediction-dir", default="/app/input/res")
+    parser.add_argument("--output-dir", default="/app/output")
     args = parser.parse_args()
 
-    main(
-        Path(args.reference_dir),
-        Path(args.prediction_dir),
-        Path(args.output_dir)
-    )
+    main(Path(args.prediction_dir), Path(args.output_dir))
