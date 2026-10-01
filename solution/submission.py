@@ -11,7 +11,7 @@ Run it locally exactly as the platform does::
 
     python tools/setup_data.py --demo         # or your own data
     BENCHOPT_DATA_HOME=phases/main/input_data/data \
-        benchopt run benchmark -d Bacteria -s submission
+        benchopt run benchmark -d Bacteria -s solution/submission.py
 
 Ideas to improve it: richer promoter representations (k-mers, learned sequence
 encoders), more experimental metadata, a neural network (see

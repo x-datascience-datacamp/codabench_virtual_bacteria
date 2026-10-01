@@ -43,7 +43,7 @@ def _add_dir(bundle, src, arc_prefix):
             continue
         if f.name.startswith(".") or f.name.endswith(".pyc"):
             continue
-        if any(part in _SKIP_PARTS for part in f.parts):
+        if any(part in _SKIP_PARTS for part in f.relative_to(src).parts):
             continue
         _add_file(bundle, f, str(Path(arc_prefix) / f.relative_to(src)))
 

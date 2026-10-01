@@ -1,12 +1,14 @@
 """Submission contract for the gene-expression competition.
 
 A submission is a **valid benchopt solver**: a folder with a ``submission.py``
-defining ``class Solver(GeneCompetSolver)``. Participants write plain Python /
-PyTorch — no benchopt internals required. They implement:
+defining ``class Solver(GeneCompetSolver)``. All its Python code lives in that
+single file (benchopt loads it by path, so sibling ``.py`` files cannot be
+imported); the folder may also hold non-code files. Participants write plain
+Python / PyTorch — no benchopt internals required. They implement:
 
 - ``get_model(self, meta)`` -> model (required). Build the (untrained) model.
-  ``meta["submission_dir"]`` points at the submission folder if you ship extra
-  files (precomputed tables, weights).
+  ``meta["submission_dir"]`` points at the submission folder, to read shipped
+  non-code files (weights, configs, precomputed tables).
 - ``fit(self, model, train_df, samples_df, genomes_dir)`` (required). Engineer
   features from the three data sources and train the model. It runs on the
   platform before evaluation.
@@ -30,7 +32,6 @@ pandas DataFrames / a genomes directory path:
 """
 
 import inspect
-import os
 from pathlib import Path
 
 from benchopt import BaseSolver
@@ -53,12 +54,9 @@ class GeneCompetSolver(BaseSolver):
         self.samples_df = samples_df
         self.genomes_dir = Path(genomes_dir) if genomes_dir is not None \
             else None
-        # Extra files ship next to submission.py; ingestion points
-        # COMPET_SUBMISSION_DIR there, else default to the solver file's dir.
-        submission_dir = os.environ.get("COMPET_SUBMISSION_DIR")
-        if submission_dir is None:
-            submission_dir = Path(inspect.getfile(type(self))).parent
-        self.meta = {**meta, "submission_dir": Path(submission_dir)}
+        # Non-code extra files ship next to submission.py.
+        submission_dir = Path(inspect.getfile(type(self))).parent
+        self.meta = {**meta, "submission_dir": submission_dir}
         self.model = self.get_model(self.meta)
 
     def run(self, _):

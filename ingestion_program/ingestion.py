@@ -1,13 +1,14 @@
 """Ingestion program for the gene-expression competition.
 
 A thin wrapper around ``benchopt run``. A submission is a benchopt solver:
-``submission.py`` (a ``GeneCompetSolver``) plus any extra files it ships.
-This program copies the benchmark (baked into the image at
-``/compet/benchmark``) to a writable workdir, drops in the submission
-solver(s), then execs::
+a single ``submission.py`` (a ``GeneCompetSolver``) holding all its Python
+code, plus optional non-code files (weights, configs) it reads from
+``meta["submission_dir"]``. This program runs the benchmark baked into the
+image at ``/compet/benchmark`` on that file, loaded by path::
 
-    benchopt run <workdir> --config <input_data>/config.yaml -s <solver> \
-        -r 1 --no-cache --no-plot --output submission
+    benchopt run /compet/benchmark --config <run_config> \
+        -s <submission_dir>/submission.py -r 1 --no-cache --no-plot \
+        --output <output_dir>/results.parquet
 
 The phase ``config.yaml`` is a **native benchopt run config** (``dataset``,
 ``seed``, ``no_timeout``, ...) plus one competition-only key stripped before
@@ -27,7 +28,6 @@ os.environ["BENCHOPT_DEBUG"] = "true"
 os.environ.setdefault("SCIPY_ARRAY_API", "1")
 
 import argparse  # noqa: E402
-import ast  # noqa: E402
 import json  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
@@ -36,74 +36,31 @@ import time  # noqa: E402
 
 import yaml  # noqa: E402
 
-# benchopt artefacts + downloaded data, never copied to the workdir.
-IGNORE = shutil.ignore_patterns(
-    "outputs", "__cache__", "__pycache__", ".pytest_cache", "data"
-)
-
-
-def _solver_name(path):
-    """The ``name`` of a top-level ``class Solver`` in *path*, read via ast.
-
-    Static parsing avoids importing (executing) the submission here; benchopt
-    imports it during the run.
-    """
-    for node in ast.parse(path.read_text()).body:
-        if isinstance(node, ast.ClassDef) and node.name == "Solver":
-            for stmt in node.body:
-                if (isinstance(stmt, ast.Assign)
-                        and any(getattr(t, "id", None) == "name"
-                                for t in stmt.targets)
-                        and isinstance(stmt.value, ast.Constant)):
-                    return stmt.value.value
-    return None
-
-
-def install_submission_solvers(submission_dir, workdir):
-    """Copy the submission's Solver files into the benchmark; return names."""
-    names = []
-    for path in sorted(submission_dir.glob("*.py")):
-        name = _solver_name(path)
-        if name is not None:
-            shutil.copyfile(
-                path, workdir / "solvers" / f"_submission_{path.stem}.py")
-            names.append(name)
-    if not names:
-        raise SystemExit(
-            f"No `class Solver` with a `name` found in {submission_dir}.")
-    return names
-
 
 def main(submission_dir, output_dir, benchmark_dir, input_dir):
-    # Point the solvers at the submission folder (shipped extra files).
-    os.environ["COMPET_SUBMISSION_DIR"] = str(submission_dir)
-    workdir = Path(tempfile.mkdtemp(prefix="compet_run_")) / "benchmark"
-    shutil.copytree(benchmark_dir, workdir, ignore=IGNORE)
+    submission = submission_dir / "submission.py"
+    if not submission.is_file():
+        raise SystemExit(f"No submission.py found in {submission_dir}.")
 
     config = input_dir / "config.yaml"
     cfg = yaml.safe_load(config.read_text())
     # benchopt rejects unknown config keys: strip the competition-only one.
     cfg = {k: v for k, v in cfg.items() if k != "scoring"}
-    run_config = workdir.parent / "run_config.yml"
+    run_config = Path(tempfile.mkdtemp(prefix="compet_run_")) / "config.yml"
     run_config.write_text(yaml.safe_dump(cfg))
-
-    cmd = [
-        "benchopt", "run", str(workdir),
-        "-r", "1", "--no-cache", "--no-plot", "--no-html", "--no-display",
-        "--output", "submission", "--config", str(run_config),
-    ]
-    names = install_submission_solvers(submission_dir, workdir)
-    for name in names:
-        cmd += ["-s", name]
-
-    print(f"[ingestion] evaluating {', '.join(names)}", flush=True)
-    start = time.time()
-    subprocess.run(cmd, check=True)
 
     # Raw results + config for the scoring program, which only parses them.
     output_dir.mkdir(parents=True, exist_ok=True)
-    result_file = max((workdir / "outputs").glob("submission*.parquet"))
-    shutil.copyfile(result_file, output_dir / "results.parquet")
+    cmd = [
+        "benchopt", "run", str(benchmark_dir), "-s", str(submission),
+        "-r", "1", "--no-cache", "--no-plot", "--no-html", "--no-display",
+        "--output", str(output_dir / "results.parquet"),
+        "--config", str(run_config),
+    ]
+    print(f"[ingestion] evaluating {submission}", flush=True)
+    start = time.time()
+    subprocess.run(cmd, check=True)
+
     (output_dir / "metadata.json").write_text(
         json.dumps({"duration": time.time() - start}))
     shutil.copyfile(config, output_dir / "config.yaml")

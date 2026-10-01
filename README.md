@@ -45,7 +45,7 @@ python tools/setup_data.py --demo
 
 # 2. run the benchmark exactly as the platform does
 BENCHOPT_DATA_HOME=phases/main/input_data/data \
-    benchopt run benchmark -d Bacteria -s submission
+    benchopt run benchmark -d Bacteria -s solution/submission.py
 
 # design-level tests + zero-dependency smoke test
 benchopt test benchmark --skip-install

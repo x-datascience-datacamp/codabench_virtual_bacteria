@@ -34,7 +34,9 @@ def main(prediction_dir, output_dir):
 
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "scores.json").write_text(json.dumps(scores))
-    print(json.dumps(scores, indent=2))
+    # Keys only: the log is shown to the submitter, values include hidden
+    # private metrics.
+    print(f"[scoring] wrote {', '.join(scores)} to scores.json")
 
 
 if __name__ == "__main__":

@@ -55,6 +55,9 @@ phases:
     end: 2026-03-31 23:59:59
     execution_time_limit: 3600
     max_submissions_per_day: 5
+    # results.parquet and scores.json carry the hidden private metrics.
+    hide_prediction_output: True
+    hide_score_output: True
     tasks:
       - 0
 

@@ -27,8 +27,11 @@ better); MAE and R² on `log1p(counts)` are shown alongside.
 
 ## What you submit
 
-A single **`submission.py`** defining `class Solver(GeneCompetSolver)` (plus
-any extra files it needs). You implement two methods:
+A single **`submission.py`** defining `class Solver(GeneCompetSolver)`. All
+your Python code must live in this one file: the platform loads it on its own,
+so it cannot import other `.py` files you ship. You may add non-code files
+next to it (model weights, configs, precomputed tables) and read them from
+`meta["submission_dir"]` in `get_model`. You implement two methods:
 
 ```python
 class Solver(GeneCompetSolver):
@@ -55,7 +58,7 @@ evaluates it. See `solution/submission.py` for a working baseline
 pip install -r requirements.txt
 python tools/setup_data.py --demo          # or the real data, when provided
 BENCHOPT_DATA_HOME=phases/main/input_data/data \
-    benchopt run benchmark -d Bacteria -s submission
+    benchopt run benchmark -d Bacteria -s solution/submission.py
 ```
 
 The number you get locally on the public split is the number the leaderboard
