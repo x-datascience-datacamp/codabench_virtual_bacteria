@@ -64,9 +64,13 @@ flowchart TD
 
 ### 2.1 Construction des Identifiants Uniques
 - **Gène** : un gène n'est pas uniquement identifié par son `feature_id`, car plusieurs souches ou espèces peuvent partager un identifiant CDS similaire. L'identifiant absolu est le couple `(genome_id, feature_id)`, matérialisé par :
-  $$\text{gene\_uid} = \text{genome\_id} + \text{"\_"} + \text{feature\_id}$$
+$$
+\mathrm{gene\_uid} = \mathrm{genome\_id} \; \| \; \mathrm{feature\_id}
+$$
 - **Condition / Échantillon** : chaque condition correspond à un séquençage (`run_accession`) indexé sur un génome précis, soit `(genome_id, run_accession)` :
-  $$\text{condition\_uid} = \text{genome\_id} + \text{"\_"} + \text{run\_accession}$$
+$$
+\mathrm{condition\_uid} = \mathrm{genome\_id} \; \| \; \mathrm{run\_accession}
+$$
 - **Observation unitaire** : chaque ligne de la table d'observation représente la mesure d'un gène dans une condition donnée : triplet `(genome_id, feature_id, run_accession)`. C'est pour cette entité que le modèle doit prédire un couple $(\mu, \sigma)$.
 
 ### 2.2 Intégration des Facteurs de Normalisation (Offsets)
