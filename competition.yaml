@@ -65,34 +65,35 @@ leaderboards:
   - title: Results
     key: main
     columns:
-      - title: NB-NLL (public)
+      - title: NB-NLL (Challenge)
         key: nb_nll
         index: 0
         sorting: asc
-      - title: MAE (public)
+      - title: MAE (Challenge)
         key: mae
         index: 1
         sorting: asc
-      - title: R2 (public)
+      - title: R2 (Challenge)
         key: r2
         index: 2
         sorting: desc
-      - title: NB-NLL (private)
-        key: nb_nll_private
+      - title: NB-NLL (C)
+        key: nb_nll_C
         index: 3
         sorting: asc
-        hidden: True
-      - title: NB-NLL (private, near)
-        key: nb_nll_private_near
+      - title: NB-NLL (A: new genes)
+        key: nb_nll_A
         index: 4
         sorting: asc
-        hidden: True
-      - title: NB-NLL (private, far)
-        key: nb_nll_private_far
+      - title: NB-NLL (B: new conditions)
+        key: nb_nll_B
         index: 5
         sorting: asc
-        hidden: True
+      - title: NB-NLL (D: double holdout)
+        key: nb_nll_D
+        index: 6
+        sorting: asc
       - title: Duration (s)
         key: duration
-        index: 6
+        index: 7
         sorting: asc

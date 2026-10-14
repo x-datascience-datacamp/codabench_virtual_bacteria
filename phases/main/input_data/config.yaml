@@ -1,14 +1,15 @@
 # Phase config — a native `benchopt run --config` file plus one competition
 # key (`scoring`) read by the scoring program and stripped by ingestion.
 dataset:
-  - Bacteria
+  - BacterialExpression
 seed: 42
 no_timeout: true
 scoring:
   columns:
-    nb_nll: objective_nb_nll_public
-    mae: objective_mae_public
-    r2: objective_r2_public
-    nb_nll_private: objective_nb_nll_private
-    nb_nll_private_near: objective_nb_nll_private_near
-    nb_nll_private_far: objective_nb_nll_private_far
+    nb_nll: objective_nb_nll_challenge
+    mae: objective_mae_challenge
+    r2: objective_r2_challenge
+    nb_nll_C: objective_nb_nll_C
+    nb_nll_A: objective_nb_nll_A
+    nb_nll_B: objective_nb_nll_B
+    nb_nll_D: objective_nb_nll_D

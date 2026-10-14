@@ -20,8 +20,9 @@ class ConstantModel:
         self.sigma = float(sigma)
 
     def fit(self, train_df, samples_df, genomes_dir):
-        if "counts" in train_df.columns:
-            self.mu = float(max(train_df["counts"].mean(), 1e-6))
+        target_col = "readcount" if "readcount" in train_df.columns else "counts"
+        if target_col in train_df.columns:
+            self.mu = float(max(train_df[target_col].mean(), 1e-6))
         return self
 
     def predict(self, test_df, samples_df, genomes_dir):

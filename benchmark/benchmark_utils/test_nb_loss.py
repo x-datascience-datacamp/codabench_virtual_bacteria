@@ -25,6 +25,15 @@ def test_perfect_mu_gives_zero_error():
     assert log_r2(y, y) == pytest.approx(1.0)
 
 
+def test_nb_nll_supports_float_counts():
+    y = np.array([4434.5, 0.5, 12.0])
+    mu = np.array([4000.0, 1.0, 10.0])
+    r = 2.0
+    val = nb_nll(y, mu, r)
+    assert np.isfinite(val)
+    assert val > 0.0
+
+
 def test_check_predictions_rejects_bad_output():
     with pytest.raises(ValueError):
         check_predictions(np.zeros((3, 2)), 4)          # wrong length

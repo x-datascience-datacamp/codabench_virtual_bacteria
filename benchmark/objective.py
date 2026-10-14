@@ -62,6 +62,23 @@ class Objective(BaseObjective):
             scores[f"nb_nll_{name}"] = nb_nll(counts, mu, sigma)
             scores[f"mae_{name}"] = log_mae(counts, mu)
             scores[f"r2_{name}"] = log_r2(counts, mu)
+
+        # Challenge leaderboard aggregation: equal weighting on A, B, and C
+        eval_splits = [k for k in ("A", "B", "C") if f"nb_nll_{k}" in scores]
+        if eval_splits:
+            scores["nb_nll_challenge"] = float(
+                sum(scores[f"nb_nll_{k}"] for k in eval_splits) / len(eval_splits)
+            )
+            scores["mae_challenge"] = float(
+                sum(scores[f"mae_{k}"] for k in eval_splits) / len(eval_splits)
+            )
+            scores["r2_challenge"] = float(
+                sum(scores[f"r2_{k}"] for k in eval_splits) / len(eval_splits)
+            )
+            scores["value"] = scores["nb_nll_challenge"]
+        elif scores:
+            scores["value"] = next(iter(scores.values()))
+
         return scores
 
     def get_one_result(self):

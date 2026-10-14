@@ -16,3 +16,4 @@ ingestion_res/
 scoring_res/
 _bundle/
 .claude/
+data/ (remove the data folder)

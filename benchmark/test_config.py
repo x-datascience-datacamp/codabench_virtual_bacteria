@@ -4,7 +4,7 @@ import pytest
 
 # The real dataset needs the staged data files, which CI does not carry;
 # ``Simulated`` covers the no-data smoke test.
-REAL_DATASETS = ("bacteria",)
+REAL_DATASETS = ("bacteria", "bacterialexpression")
 
 
 def check_test_dataset_install(dataset_class):
