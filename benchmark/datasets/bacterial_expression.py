@@ -36,7 +36,6 @@ class Dataset(BaseDataset):
 
     name = "BacterialExpression"
 
-    requirements = ["pandas", "numpy", "scipy"]
 
     def get_data(self):
         root = get_data_path("gene_expression")
