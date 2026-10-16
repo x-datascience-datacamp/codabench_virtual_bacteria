@@ -36,36 +36,50 @@ class Dataset(BaseDataset):
 
     name = "BacterialExpression"
 
+    parameters = {
+        "mode": ["debug"],
+    }
 
     def get_data(self):
         root = get_data_path("gene_expression")
         if not root.exists():
-            raise SystemExit(
-                f"[BacterialExpression] no data at {root}. Generate it with "
-                "`python tools/setup_data.py` (real data) or "
-                "`python tools/setup_data.py --demo` (synthetic)."
+            local_fallback = (
+                Path(__file__).resolve().parents[2]
+                / "phases/main/input_data/data/gene_expression"
             )
+            if local_fallback.exists():
+                root = local_fallback
+            else:
+                raise SystemExit(
+                    f"[BacterialExpression] no data at {root}. Generate it with "
+                    f"`python tools/setup_data.py --mode {self.mode}`."
+                )
 
-        train_path = root / "train_data.tsv"
+        mode_dir = root / self.mode
+        data_dir = mode_dir if mode_dir.exists() else root
+
+        train_path = data_dir / "train_data.tsv"
         if not train_path.exists():
             raise SystemExit(
-                f"[BacterialExpression] missing {train_path}. "
-                "Run `python tools/setup_data.py` first."
+                f"[BacterialExpression] missing {train_path} for mode '{self.mode}'. "
+                f"Run `python tools/setup_data.py --mode {self.mode}` first."
             )
         train_df = pd.read_csv(train_path, sep="\t")
 
-        cond_path = root / "condition_annotations.tsv"
+        cond_path = data_dir / "condition_annotations.tsv"
         samples_df = pd.read_csv(cond_path, sep="\t") if cond_path.exists() else None
 
-        feat_path = root / "feature_annotations.tsv"
+        feat_path = data_dir / "feature_annotations.tsv"
         feat_df = pd.read_csv(feat_path, sep="\t") if feat_path.exists() else None
 
-        genomes_dir = root / "genomes"
-        genomes_dir = genomes_dir if (genomes_dir.exists() and any(genomes_dir.iterdir())) else None
+        genomes_dir = data_dir / "genomes"
+        if not (genomes_dir.exists() and any(genomes_dir.iterdir())):
+            root_genomes = root / "genomes"
+            genomes_dir = root_genomes if (root_genomes.exists() and any(root_genomes.iterdir())) else None
 
         test_sets = {}
-        for split_name in ("C", "A", "B", "D"):
-            split_dir = root / split_name
+        for split_name in ("A", "B", "C", "D"):
+            split_dir = data_dir / split_name
             t_data = split_dir / "test_data.tsv"
             t_lab = split_dir / "labels.csv"
             if t_data.is_file() and t_lab.is_file():
@@ -75,7 +89,7 @@ class Dataset(BaseDataset):
 
         if not test_sets:
             raise SystemExit(
-                f"[BacterialExpression] No test splits found in {root}."
+                f"[BacterialExpression] No test splits found in {data_dir} for mode '{self.mode}'."
             )
 
         return dict(
