@@ -47,7 +47,7 @@ jobs:
             --prediction-dir ingestion_res \
             --output-dir scoring_res
           python -c "import json; s=json.load(open('scoring_res/scores.json')); \
-            keys={'nb_nll','mae','r2','nb_nll_private','nb_nll_private_near','nb_nll_private_far'}; \
+            keys={'nb_nll','mae','r2','nb_nll_A','nb_nll_B','nb_nll_C','nb_nll_D'}; \
             assert keys <= set(s), s; print('scores OK:', s)"
 
   docker:

@@ -314,9 +314,8 @@ def make_demo_data(seed: int = 0):
     # Conditions
     cond_species = [rng.choice(species_list) for _ in runs]
     cond_genomes = [genomes[species_list.index(sp)] for sp in cond_species]
-    cond_status = [
-        "train" if rng.random() < 0.8 else "test_full" for _ in runs
-    ]
+    split_status = ["train", "test_partial", "test_full"]
+    cond_status = rng.choice(split_status, len(runs), p=[0.5, 0.3, 0.2])
     log_sf = rng.normal(0.0, 0.3, len(runs))
 
     cond_df = pd.DataFrame(
@@ -337,7 +336,7 @@ def make_demo_data(seed: int = 0):
         for f_idx in range(1, 31):
             fid = f"cds-WP_{g}_{f_idx:03d}"
             length = int(rng.integers(300, 2500))
-            status = "train" if rng.random() < 0.75 else "test_full"
+            status = rng.choice(split_status, p=[0.5, 0.3, 0.2])
             feat_records.append(
                 {
                     "species": sp,
@@ -362,25 +361,9 @@ def make_demo_data(seed: int = 0):
     obs_df = cond_df.merge(
         feat_df, on=["species", "genome_id"], suffixes=("_run", "_feat")
     )
-    fs = obs_df["status_feat"]
-    cs = obs_df["status_run"]
-
-    status = np.where(
-        (fs == "train") & (cs == "train"),
-        "Train",
-        np.where(
-            (fs == "test_full") & (cs == "train"),
-            "A",
-            np.where(
-                (fs == "train") & (cs == "test_full"),
-                "B",
-                np.where((fs == "test_full") & (cs == "test_full"), "D", "C"),
-            ),
-        ),
-    )
-    obs_df["status"] = status
-    obs_df["feature_status"] = fs
-    obs_df["run_status"] = cs
+    obs_df = obs_df.rename(
+        columns={"status_feat": "feature_status", "status_run": "run_status"}
+    ).merge(STATUS_RULES, on=["feature_status", "run_status"], how="left")
     obs_df["gene_uid"] = obs_df["genome_id"] + "_" + obs_df["feature_id"]
     obs_df["condition_uid"] = (
         obs_df["genome_id"] + "_" + obs_df["run_accession"]
@@ -395,8 +378,6 @@ def make_demo_data(seed: int = 0):
     mu = np.exp(np.clip(log_mu, 0.0, 10.0))
     counts = np.maximum(0.0, rng.normal(mu, np.sqrt(mu + 0.2 * mu * mu)))
     obs_df["readcount"] = np.round(counts, 1)
-
-    obs_df = obs_df.drop(columns=["status_feat", "status_run"])
 
     return obs_df, feat_df, cond_df, None
 
