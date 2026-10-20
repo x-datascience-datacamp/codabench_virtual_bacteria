@@ -1,12 +1,14 @@
-"""Baseline Level 2: Gradient Boosting with Negative-Binomial dispersion grid search.
+"""Baseline Level 2: Gradient Boosting with NB dispersion grid search.
 
 Inputs restricted to the 3 unique IDs and 2 normalization offsets:
 - Categoricals : genome_id, feature_id, run_accession
 - Numerics     : log_length_ratio, log_size_factor
 
 Procedure:
-1. Train a Gradient Boosting Regressor on train fold predicting log1p(readcount).
-2. Evaluate Negative-Binomial NLL across candidate dispersion values r in (0.5, 1.0, 2.0, 5.0, 10.0).
+1. Train a Gradient Boosting Regressor on train fold predicting
+   log1p(readcount).
+2. Evaluate Negative-Binomial NLL across candidate dispersion values
+   r in (0.5, 1.0, 2.0, 5.0, 10.0).
 3. Select optimal dispersion r* minimizing validation NB-NLL.
 4. Output (mu, r*) predictions.
 
@@ -14,7 +16,6 @@ If CatBoost is installed, it is used with native categorical handling.
 Otherwise, falls back to scikit-learn's HistGradientBoostingRegressor.
 """
 
-from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -42,8 +43,12 @@ def _extract_tabular_features(df: pd.DataFrame):
 
 class CatBoostNBModel:
 
-    def __init__(self, iterations: int = 150, lr: float = 0.1,
-                 candidates=(0.5, 1.0, 2.0, 5.0, 10.0)):
+    def __init__(
+        self,
+        iterations: int = 150,
+        lr: float = 0.1,
+        candidates=(0.5, 1.0, 2.0, 5.0, 10.0),
+    ):
         self.iterations = iterations
         self.lr = lr
         self.candidates = list(candidates)
@@ -52,7 +57,9 @@ class CatBoostNBModel:
         self.is_catboost = False
 
     def fit(self, train_df: pd.DataFrame, samples_df=None, genomes_dir=None):
-        target_col = "readcount" if "readcount" in train_df.columns else "counts"
+        target_col = (
+            "readcount" if "readcount" in train_df.columns else "counts"
+        )
         y = train_df[target_col].to_numpy(dtype=float)
         X, cat_cols, num_cols = _extract_tabular_features(train_df)
 
@@ -105,7 +112,9 @@ class CatBoostNBModel:
         from sklearn.ensemble import HistGradientBoostingRegressor
         from sklearn.preprocessing import OrdinalEncoder
 
-        oe = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=np.nan)
+        oe = OrdinalEncoder(
+            handle_unknown="use_encoded_value", unknown_value=np.nan
+        )
         X_cat_tr = oe.fit_transform(X_tr[cat_cols])
         X_tr_enc = np.column_stack([X_cat_tr, X_tr[num_cols].to_numpy()])
 
@@ -137,7 +146,9 @@ class CatBoostNBModel:
         self.is_catboost = False
         return self
 
-    def predict(self, test_df: pd.DataFrame, samples_df=None, genomes_dir=None):
+    def predict(
+        self, test_df: pd.DataFrame, samples_df=None, genomes_dir=None
+    ):
         X, cat_cols, num_cols = _extract_tabular_features(test_df)
         n = len(X)
         if self.best_model is None:

@@ -24,8 +24,10 @@ from benchmark_utils.nb_loss import nb_nll, log_mae, log_r2, check_predictions
 class Objective(BaseObjective):
 
     name = "gene-expression-nb"
-    url = ("https://github.com/x-datascience-datacamp/"
-           "codabench_virtual_bacteria")
+    url = (
+        "https://github.com/x-datascience-datacamp/"
+        "codabench_virtual_bacteria"
+    )
 
     requirements = ["scipy", "scikit-learn"]
 
@@ -56,8 +58,9 @@ class Objective(BaseObjective):
     def evaluate_result(self, model):
         scores = {}
         for name, (features_df, counts) in self.test_sets.items():
-            preds = model.predict(features_df, self.samples_df,
-                                  self.genomes_dir)
+            preds = model.predict(
+                features_df, self.samples_df, self.genomes_dir
+            )
             mu, sigma = check_predictions(preds, len(counts))
             scores[f"nb_nll_{name}"] = nb_nll(counts, mu, sigma)
             scores[f"mae_{name}"] = log_mae(counts, mu)
@@ -67,7 +70,8 @@ class Objective(BaseObjective):
         eval_splits = [k for k in ("A", "B", "C") if f"nb_nll_{k}" in scores]
         if eval_splits:
             scores["nb_nll_challenge"] = float(
-                sum(scores[f"nb_nll_{k}"] for k in eval_splits) / len(eval_splits)
+                sum(scores[f"nb_nll_{k}"] for k in eval_splits)
+                / len(eval_splits)
             )
             scores["mae_challenge"] = float(
                 sum(scores[f"mae_{k}"] for k in eval_splits) / len(eval_splits)
@@ -85,4 +89,5 @@ class Objective(BaseObjective):
         # A trivial constant model, used by ``benchopt test`` to validate the
         # metric computation without running a real solver.
         from benchmark_utils.baselines import ConstantModel
+
         return dict(model=ConstantModel())

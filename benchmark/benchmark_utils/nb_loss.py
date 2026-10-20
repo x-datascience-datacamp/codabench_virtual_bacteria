@@ -12,7 +12,6 @@ MAE and R^2 on ``log1p(counts)`` are reported alongside for interpretability.
 
 import numpy as np
 from scipy.special import gammaln
-from scipy.stats import nbinom
 from sklearn.metrics import mean_absolute_error, r2_score
 
 _EPS = 1e-8
@@ -22,7 +21,8 @@ def nb_nll(counts, mu, sigma):
     """Mean Negative-Binomial negative log-likelihood (lower is better).
 
     Continuous Gamma relaxation that supports both integer and float counts:
-        log_pmf = gammaln(y + r) - gammaln(r) - gammaln(y + 1) + r*log(r) + y*log(mu) - (y + r)*log(r + mu)
+        log_pmf = gammaln(y + r) - gammaln(r) - gammaln(y + 1)
+                  + r*log(r) + y*log(mu) - (y + r)*log(r + mu)
     """
     y = np.clip(np.asarray(counts, dtype=np.float64), 0.0, None)
     mu = np.clip(np.asarray(mu, dtype=np.float64), _EPS, None)

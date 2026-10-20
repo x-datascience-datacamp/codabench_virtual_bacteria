@@ -21,7 +21,6 @@ Ideas to improve it:
 - Graph neural networks leveraging the homology & proximity graph
 """
 
-from pathlib import Path
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
@@ -40,16 +39,20 @@ class SubmissionModel:
         self.sigma = 1.0
 
     def fit(self, train_df: pd.DataFrame, samples_df=None, genomes_dir=None):
-        target_col = "readcount" if "readcount" in train_df.columns else "counts"
+        target_col = (
+            "readcount" if "readcount" in train_df.columns else "counts"
+        )
         y = train_df[target_col].to_numpy(dtype=float)
 
         llr = (
             train_df["log_length_ratio"].to_numpy(dtype=float)
-            if "log_length_ratio" in train_df.columns else np.zeros(len(train_df))
+            if "log_length_ratio" in train_df.columns
+            else np.zeros(len(train_df))
         )
         lsf = (
             train_df["log_size_factor"].to_numpy(dtype=float)
-            if "log_size_factor" in train_df.columns else np.zeros(len(train_df))
+            if "log_size_factor" in train_df.columns
+            else np.zeros(len(train_df))
         )
         offset = llr + lsf
 
@@ -58,14 +61,18 @@ class SubmissionModel:
             gene_ids = train_df["gene_uid"].astype(str).values
         else:
             gene_ids = (
-                train_df["genome_id"].astype(str) + "_" + train_df["feature_id"].astype(str)
+                train_df["genome_id"].astype(str)
+                + "_"
+                + train_df["feature_id"].astype(str)
             ).values
 
         if "condition_uid" in train_df.columns:
             cond_ids = train_df["condition_uid"].astype(str).values
         else:
             cond_ids = (
-                train_df["genome_id"].astype(str) + "_" + train_df["run_accession"].astype(str)
+                train_df["genome_id"].astype(str)
+                + "_"
+                + train_df["run_accession"].astype(str)
             ).values
 
         # Normalized log counts
@@ -77,14 +84,18 @@ class SubmissionModel:
         lam = self.shrinkage
         df_genes = pd.DataFrame({"gene": gene_ids, "val": y_centered})
         g_stats = df_genes.groupby("gene")["val"].agg(["sum", "count"])
-        self.gene_effects = (g_stats["sum"] / (g_stats["count"] + lam)).to_dict()
+        self.gene_effects = (
+            g_stats["sum"] / (g_stats["count"] + lam)
+        ).to_dict()
 
         # Condition effects with shrinkage
         alpha_vec = np.array([self.gene_effects.get(g, 0.0) for g in gene_ids])
         resid = y_centered - alpha_vec
         df_conds = pd.DataFrame({"cond": cond_ids, "val": resid})
         c_stats = df_conds.groupby("cond")["val"].agg(["sum", "count"])
-        self.cond_effects = (c_stats["sum"] / (c_stats["count"] + lam)).to_dict()
+        self.cond_effects = (
+            c_stats["sum"] / (c_stats["count"] + lam)
+        ).to_dict()
 
         # Calibrate dispersion sigma
         beta_vec = np.array([self.cond_effects.get(c, 0.0) for c in cond_ids])
@@ -93,20 +104,25 @@ class SubmissionModel:
 
         res = minimize_scalar(
             lambda log_r: nb_nll(y, mu_fit, np.exp(log_r)),
-            bounds=(-4.0, 8.0), method="bounded"
+            bounds=(-4.0, 8.0),
+            method="bounded",
         )
         self.sigma = float(np.exp(res.x))
         return self
 
-    def predict(self, test_df: pd.DataFrame, samples_df=None, genomes_dir=None):
+    def predict(
+        self, test_df: pd.DataFrame, samples_df=None, genomes_dir=None
+    ):
         n = len(test_df)
         llr = (
             test_df["log_length_ratio"].to_numpy(dtype=float)
-            if "log_length_ratio" in test_df.columns else np.zeros(n)
+            if "log_length_ratio" in test_df.columns
+            else np.zeros(n)
         )
         lsf = (
             test_df["log_size_factor"].to_numpy(dtype=float)
-            if "log_size_factor" in test_df.columns else np.zeros(n)
+            if "log_size_factor" in test_df.columns
+            else np.zeros(n)
         )
         offset = llr + lsf
 
@@ -114,14 +130,18 @@ class SubmissionModel:
             gene_ids = test_df["gene_uid"].astype(str).values
         else:
             gene_ids = (
-                test_df["genome_id"].astype(str) + "_" + test_df["feature_id"].astype(str)
+                test_df["genome_id"].astype(str)
+                + "_"
+                + test_df["feature_id"].astype(str)
             ).values
 
         if "condition_uid" in test_df.columns:
             cond_ids = test_df["condition_uid"].astype(str).values
         else:
             cond_ids = (
-                test_df["genome_id"].astype(str) + "_" + test_df["run_accession"].astype(str)
+                test_df["genome_id"].astype(str)
+                + "_"
+                + test_df["run_accession"].astype(str)
             ).values
 
         alpha = np.array([self.gene_effects.get(g, 0.0) for g in gene_ids])

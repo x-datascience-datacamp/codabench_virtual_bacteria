@@ -59,8 +59,10 @@ def _find_file(data_dir: Path, candidate_names: list) -> Path:
     )
 
 
-def simulate_splits(feat_df: pd.DataFrame, cond_df: pd.DataFrame, seed: int = 42):
-    """Simulate test_partial and test_full splits for debug/train modes using pandas.
+def simulate_splits(
+    feat_df: pd.DataFrame, cond_df: pd.DataFrame, seed: int = 42
+):
+    """Simulate test_partial and test_full splits for debug/train modes.
 
     Rule:
     - 20% randomly selected conditions: 80% test_partial, 20% test_full.
@@ -77,7 +79,11 @@ def simulate_splits(feat_df: pd.DataFrame, cond_df: pd.DataFrame, seed: int = 42
     n_full_cond = int(round(0.20 * n_test_cond))
     if n_test_cond > 0 and n_full_cond == 0 and 0.20 * n_test_cond > 0:
         n_full_cond = 1
-    test_full_cond_idx = cond_df.loc[test_cond_idx].sample(n=n_full_cond, random_state=seed).index
+    test_full_cond_idx = (
+        cond_df.loc[test_cond_idx]
+        .sample(n=n_full_cond, random_state=seed)
+        .index
+    )
     test_partial_cond_idx = test_cond_idx.difference(test_full_cond_idx)
 
     cond_df["status"] = "train"
@@ -93,7 +99,11 @@ def simulate_splits(feat_df: pd.DataFrame, cond_df: pd.DataFrame, seed: int = 42
     n_full_feat = int(round(0.20 * n_test_feat))
     if n_test_feat > 0 and n_full_feat == 0 and 0.20 * n_test_feat > 0:
         n_full_feat = 1
-    test_full_feat_idx = feat_df.loc[test_feat_idx].sample(n=n_full_feat, random_state=seed).index
+    test_full_feat_idx = (
+        feat_df.loc[test_feat_idx]
+        .sample(n=n_full_feat, random_state=seed)
+        .index
+    )
     test_partial_feat_idx = test_feat_idx.difference(test_full_feat_idx)
 
     feat_df["status"] = "train"
@@ -103,20 +113,45 @@ def simulate_splits(feat_df: pd.DataFrame, cond_df: pd.DataFrame, seed: int = 42
     return feat_df, cond_df
 
 
-def load_raw_data(data_dir: Path = Path("data"), mode: str = "debug", seed: int = 42):
+def load_raw_data(
+    data_dir: Path = Path("data"), mode: str = "debug", seed: int = 42
+):
     """Load and merge tables using pandas."""
     if mode == "debug":
-        rc_cands = ["read_count_debug.csv", "baseline_read_count_global.csv", "read_count.csv"]
-        feat_cands = ["feature_annotation_debug.csv", "baseline_feature_annotation_global.csv"]
-        cond_cands = ["condition_annotation_debug.csv", "baseline_condition_annotation_global.csv"]
+        rc_cands = [
+            "read_count_debug.csv",
+            "baseline_read_count_global.csv",
+            "read_count.csv",
+        ]
+        feat_cands = [
+            "feature_annotation_debug.csv",
+            "baseline_feature_annotation_global.csv",
+        ]
+        cond_cands = [
+            "condition_annotation_debug.csv",
+            "baseline_condition_annotation_global.csv",
+        ]
     elif mode == "train":
         rc_cands = ["read_count_train.csv", "read_count.csv"]
         feat_cands = ["feature_annotation_train.csv", "feature_annotation.csv"]
-        cond_cands = ["condition_annotation_train.csv", "condition_annotation.csv"]
+        cond_cands = [
+            "condition_annotation_train.csv",
+            "condition_annotation.csv",
+        ]
     elif mode == "full":
-        rc_cands = ["read_count_global.csv", "baseline_read_count_global.csv", "read_count.csv"]
-        feat_cands = ["feature_annotation_global.csv", "baseline_feature_annotation_global.csv"]
-        cond_cands = ["condition_annotation_global.csv", "baseline_condition_annotation_global.csv"]
+        rc_cands = [
+            "read_count_global.csv",
+            "baseline_read_count_global.csv",
+            "read_count.csv",
+        ]
+        feat_cands = [
+            "feature_annotation_global.csv",
+            "baseline_feature_annotation_global.csv",
+        ]
+        cond_cands = [
+            "condition_annotation_global.csv",
+            "baseline_condition_annotation_global.csv",
+        ]
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
@@ -132,11 +167,19 @@ def load_raw_data(data_dir: Path = Path("data"), mode: str = "debug", seed: int 
         feat_df, cond_df = simulate_splits(feat_df, cond_df, seed=seed)
 
     # Build unique identifiers
-    rc_df["gene_uid"] = rc_df["genome_id"].astype(str) + "_" + rc_df["feature_id"].astype(str)
-    rc_df["condition_uid"] = rc_df["genome_id"].astype(str) + "_" + rc_df["run_accession"].astype(str)
+    rc_df["gene_uid"] = (
+        rc_df["genome_id"].astype(str) + "_" + rc_df["feature_id"].astype(str)
+    )
+    rc_df["condition_uid"] = (
+        rc_df["genome_id"].astype(str)
+        + "_"
+        + rc_df["run_accession"].astype(str)
+    )
 
     # Prepare feature annotations for merge
-    feat_cols = [c for c in feat_df.columns if c not in ("species", "ref_species")]
+    feat_cols = [
+        c for c in feat_df.columns if c not in ("species", "ref_species")
+    ]
     feat_merge = feat_df[feat_cols].copy()
     if "status" in feat_merge.columns:
         feat_merge = feat_merge.rename(columns={"status": "feature_status"})
@@ -149,25 +192,43 @@ def load_raw_data(data_dir: Path = Path("data"), mode: str = "debug", seed: int 
 
     # Clean existing status columns in rc_df for debug/train simulation
     if mode in ("debug", "train"):
-        cols_to_drop = [c for c in ("feature_status", "run_status", "status") if c in rc_df.columns]
+        cols_to_drop = [
+            c
+            for c in ("feature_status", "run_status", "status")
+            if c in rc_df.columns
+        ]
         if cols_to_drop:
             rc_df = rc_df.drop(columns=cols_to_drop)
 
     # Merge feature metadata
-    feat_overlap = [c for c in feat_merge.columns if c in rc_df.columns and c not in ("genome_id", "feature_id")]
+    feat_overlap = [
+        c
+        for c in feat_merge.columns
+        if c in rc_df.columns and c not in ("genome_id", "feature_id")
+    ]
     if feat_overlap:
         feat_merge = feat_merge.drop(columns=feat_overlap)
-    merged_df = rc_df.merge(feat_merge, on=["genome_id", "feature_id"], how="left")
+    merged_df = rc_df.merge(
+        feat_merge, on=["genome_id", "feature_id"], how="left"
+    )
 
     # Merge condition metadata
-    cond_overlap = [c for c in cond_merge.columns if c in merged_df.columns and c not in ("genome_id", "run_accession")]
+    cond_overlap = [
+        c
+        for c in cond_merge.columns
+        if c in merged_df.columns and c not in ("genome_id", "run_accession")
+    ]
     if cond_overlap:
         cond_merge = cond_merge.drop(columns=cond_overlap)
-    merged_df = merged_df.merge(cond_merge, on=["genome_id", "run_accession"], how="left")
+    merged_df = merged_df.merge(
+        cond_merge, on=["genome_id", "run_accession"], how="left"
+    )
 
     # Assign observation status
     if mode in ("debug", "train"):
-        merged_df = merged_df.merge(STATUS_RULES, on=["feature_status", "run_status"], how="left")
+        merged_df = merged_df.merge(
+            STATUS_RULES, on=["feature_status", "run_status"], how="left"
+        )
         merged_df["status"] = merged_df["status"].fillna("Train")
 
     genomes_dir = None
@@ -180,8 +241,13 @@ def load_raw_data(data_dir: Path = Path("data"), mode: str = "debug", seed: int 
     return merged_df, feat_df, cond_df, genomes_dir
 
 
-def write_layout(out_dir: Path, obs_df: pd.DataFrame, feat_df: pd.DataFrame,
-                 cond_df: pd.DataFrame, genomes_src: Path = None):
+def write_layout(
+    out_dir: Path,
+    obs_df: pd.DataFrame,
+    feat_df: pd.DataFrame,
+    cond_df: pd.DataFrame,
+    genomes_src: Path = None,
+):
     """Write output TSV/CSV files using pandas."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -192,9 +258,13 @@ def write_layout(out_dir: Path, obs_df: pd.DataFrame, feat_df: pd.DataFrame,
 
     # Annotations
     if not feat_df.empty:
-        feat_df.to_csv(out_dir / "feature_annotations.tsv", sep="\t", index=False)
+        feat_df.to_csv(
+            out_dir / "feature_annotations.tsv", sep="\t", index=False
+        )
     if not cond_df.empty:
-        cond_df.to_csv(out_dir / "condition_annotations.tsv", sep="\t", index=False)
+        cond_df.to_csv(
+            out_dir / "condition_annotations.tsv", sep="\t", index=False
+        )
 
     # Test splits: A, B, C, D
     counts = {}
@@ -204,9 +274,15 @@ def write_layout(out_dir: Path, obs_df: pd.DataFrame, feat_df: pd.DataFrame,
         split_dir = out_dir / split_name
         split_dir.mkdir(parents=True, exist_ok=True)
         if not split_df.empty:
-            feat_cols = [c for c in split_df.columns if c not in ("readcount", "status")]
-            split_df[feat_cols].to_csv(split_dir / "test_data.tsv", sep="\t", index=False)
-            split_df[["readcount"]].to_csv(split_dir / "labels.csv", index=False)
+            feat_cols = [
+                c for c in split_df.columns if c not in ("readcount", "status")
+            ]
+            split_df[feat_cols].to_csv(
+                split_dir / "test_data.tsv", sep="\t", index=False
+            )
+            split_df[["readcount"]].to_csv(
+                split_dir / "labels.csv", index=False
+            )
 
     # Copy genomes if available
     if genomes_src is not None and genomes_src.is_dir():
@@ -218,31 +294,41 @@ def write_layout(out_dir: Path, obs_df: pd.DataFrame, feat_df: pd.DataFrame,
                 if not dst_file.exists():
                     shutil.copyfile(g_file, dst_file)
 
-    print(f"[setup_data] wrote {out_dir} (train={len(train_df)}, "
-          f"{', '.join(f'{k}={v}' for k, v in counts.items())})")
+    print(
+        f"[setup_data] wrote {out_dir} (train={len(train_df)}, "
+        f"{', '.join(f'{k}={v}' for k, v in counts.items())})"
+    )
 
 
 def make_demo_data(seed: int = 0):
     """Synthetic dataset for smoke tests (using numpy and pandas)."""
     rng = np.random.default_rng(seed)
-    species_list = ["Escherichia_coli", "Pseudomonas_putida", "Bacillus_subtilis"]
+    species_list = [
+        "Escherichia_coli",
+        "Pseudomonas_putida",
+        "Bacillus_subtilis",
+    ]
     genomes = [f"GCF_{i:09d}.1" for i in range(1, 4)]
     runs = [f"SRR{i:07d}" for i in range(1, 21)]
 
     # Conditions
     cond_species = [rng.choice(species_list) for _ in runs]
     cond_genomes = [genomes[species_list.index(sp)] for sp in cond_species]
-    cond_status = ["train" if rng.random() < 0.8 else "test_full" for _ in runs]
+    cond_status = [
+        "train" if rng.random() < 0.8 else "test_full" for _ in runs
+    ]
     log_sf = rng.normal(0.0, 0.3, len(runs))
 
-    cond_df = pd.DataFrame({
-        "species": cond_species,
-        "genome_id": cond_genomes,
-        "prj_accession": "PRJNA001",
-        "run_accession": runs,
-        "status": cond_status,
-        "log_size_factor": log_sf,
-    })
+    cond_df = pd.DataFrame(
+        {
+            "species": cond_species,
+            "genome_id": cond_genomes,
+            "prj_accession": "PRJNA001",
+            "run_accession": runs,
+            "status": cond_status,
+            "log_size_factor": log_sf,
+        }
+    )
 
     # Features
     feat_records = []
@@ -252,39 +338,60 @@ def make_demo_data(seed: int = 0):
             fid = f"cds-WP_{g}_{f_idx:03d}"
             length = int(rng.integers(300, 2500))
             status = "train" if rng.random() < 0.75 else "test_full"
-            feat_records.append({
-                "species": sp, "genome_id": g, "feature_id": fid,
-                "ref_genome_id": g, "ref_feature_id": fid,
-                "Chr": f"NC_{g}", "Start": f_idx * 1000,
-                "End": f_idx * 1000 + length, "Strand": "+",
-                "Length": float(length), "homology": 100.0,
-                "on_contig_edge": False, "status": status,
-                "log_length_ratio": math.log(length) - 6.9,
-            })
+            feat_records.append(
+                {
+                    "species": sp,
+                    "genome_id": g,
+                    "feature_id": fid,
+                    "ref_genome_id": g,
+                    "ref_feature_id": fid,
+                    "Chr": f"NC_{g}",
+                    "Start": f_idx * 1000,
+                    "End": f_idx * 1000 + length,
+                    "Strand": "+",
+                    "Length": float(length),
+                    "homology": 100.0,
+                    "on_contig_edge": False,
+                    "status": status,
+                    "log_length_ratio": math.log(length) - 6.9,
+                }
+            )
     feat_df = pd.DataFrame(feat_records)
 
     # Observations
-    obs_df = cond_df.merge(feat_df, on=["species", "genome_id"], suffixes=("_run", "_feat"))
+    obs_df = cond_df.merge(
+        feat_df, on=["species", "genome_id"], suffixes=("_run", "_feat")
+    )
     fs = obs_df["status_feat"]
     cs = obs_df["status_run"]
 
     status = np.where(
-        (fs == "train") & (cs == "train"), "Train",
+        (fs == "train") & (cs == "train"),
+        "Train",
         np.where(
-            (fs == "test_full") & (cs == "train"), "A",
+            (fs == "test_full") & (cs == "train"),
+            "A",
             np.where(
-                (fs == "train") & (cs == "test_full"), "B",
-                np.where((fs == "test_full") & (cs == "test_full"), "D", "C")
-            )
-        )
+                (fs == "train") & (cs == "test_full"),
+                "B",
+                np.where((fs == "test_full") & (cs == "test_full"), "D", "C"),
+            ),
+        ),
     )
     obs_df["status"] = status
     obs_df["feature_status"] = fs
     obs_df["run_status"] = cs
     obs_df["gene_uid"] = obs_df["genome_id"] + "_" + obs_df["feature_id"]
-    obs_df["condition_uid"] = obs_df["genome_id"] + "_" + obs_df["run_accession"]
+    obs_df["condition_uid"] = (
+        obs_df["genome_id"] + "_" + obs_df["run_accession"]
+    )
 
-    log_mu = 4.0 + obs_df["log_length_ratio"] + obs_df["log_size_factor"] + rng.normal(0, 0.2, len(obs_df))
+    log_mu = (
+        4.0
+        + obs_df["log_length_ratio"]
+        + obs_df["log_size_factor"]
+        + rng.normal(0, 0.2, len(obs_df))
+    )
     mu = np.exp(np.clip(log_mu, 0.0, 10.0))
     counts = np.maximum(0.0, rng.normal(mu, np.sqrt(mu + 0.2 * mu * mu)))
     obs_df["readcount"] = np.round(counts, 1)
@@ -296,16 +403,30 @@ def make_demo_data(seed: int = 0):
 
 def main():
     parser = argparse.ArgumentParser(description="Build competition splits")
-    parser.add_argument("--mode", choices=["debug", "train", "full", "all"], default="debug",
-                        help="Dataset mode to build: debug, train, full, or all (default: debug)")
-    parser.add_argument("--demo", action="store_true",
-                        help="generate a tiny synthetic dataset")
-    parser.add_argument("--data-dir", default="data",
-                        help="source raw data directory")
-    parser.add_argument("--out", default=str(OUT_DIR),
-                        help="output data directory for benchmark")
-    parser.add_argument("--seed", type=int, default=42,
-                        help="random seed for simulation (default: 42)")
+    parser.add_argument(
+        "--mode",
+        choices=["debug", "train", "full", "all"],
+        default="debug",
+        help="Dataset mode to build: debug, train, full, or all "
+        "(default: debug)",
+    )
+    parser.add_argument(
+        "--demo", action="store_true", help="generate a tiny synthetic dataset"
+    )
+    parser.add_argument(
+        "--data-dir", default="data", help="source raw data directory"
+    )
+    parser.add_argument(
+        "--out",
+        default=str(OUT_DIR),
+        help="output data directory for benchmark",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="random seed for simulation (default: 42)",
+    )
     args = parser.parse_args()
 
     out_base = Path(args.out)

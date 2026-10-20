@@ -73,6 +73,9 @@ class Dataset(BaseDataset):
                            random_state=rng.integers(1e9)).reset_index(
             drop=True)
         obs["run_accession"] = s["Run"].values
+        # Same composite-ID columns as the real BacterialExpression schema
+        obs["genome_id"] = obs["reference"]
+        obs["feature_id"] = obs["Geneid"]
         obs["log_size_factor"] = rng.normal(0.0, 0.3, n_obs)
         obs["feature_split"] = feature_split
         obs["condition_split"] = condition_split
