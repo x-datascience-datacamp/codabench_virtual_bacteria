@@ -56,9 +56,11 @@ evaluates it. See `solution/submission.py` for a working baseline
 
 ```bash
 pip install -r requirements.txt
-python tools/setup_data.py --demo          # or the real data, when provided
-BENCHOPT_DATA_HOME=phases/main/input_data/data \
-    benchopt run benchmark -d Bacteria -s solution/submission.py
+# downloads the training data, then scores on simulated A/B/C/D regions
+# (mode=debug for a small subsample)
+benchopt prepare benchmark -d "BacterialExpression[mode=train]"
+benchopt run benchmark -d "BacterialExpression[mode=train]" \
+    -s solution/submission.py
 ```
 
 The number you get locally on the public split is the number the leaderboard

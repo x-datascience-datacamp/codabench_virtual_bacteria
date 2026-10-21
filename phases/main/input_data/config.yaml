@@ -1,7 +1,7 @@
 # Phase config — a native `benchopt run --config` file plus one competition
 # key (`scoring`) read by the scoring program and stripped by ingestion.
 dataset:
-  - BacterialExpression
+  - BacterialExpression[mode=full]
 seed: 42
 no_timeout: true
 scoring:

@@ -1,33 +1,45 @@
-"""Multi-species bacterial transcriptomics dataset with multi-quadrant splits.
+"""Multi-species bacterial transcriptomics dataset, A/B/C/D test regions.
 
-Reads the files produced by ``tools/setup_data.py`` under the benchmark data
-path (``benchopt``'s ``get_data_path("gene_expression")``)::
+``prepare`` downloads the release files of ``mode`` from Zenodo, then writes
+the train / A / B / C / D split (``benchmark_utils.split``)::
 
-    <root>/gene_expression/
-      train_data.tsv                 training observations with ``readcount``
-      feature_annotations.tsv        full gene metadata table
-      condition_annotations.tsv      full condition (sample) metadata table
-      C/{test_data.tsv, labels.csv}  unseen (gene x condition) pairing
-      A/{test_data.tsv, labels.csv}  unseen genes
-      B/{test_data.tsv, labels.csv}  unseen conditions
-      D/{test_data.tsv, labels.csv}  unseen genes x unseen conditions
-      genomes/                       GenBank / FASTA genomes (optional)
+    benchopt prepare benchmark -d "BacterialExpression[mode=train]"
 
-Returns the observation tables and test sets to ``Objective.set_data``.
+- ``debug``: small subsample, regions simulated from the training data;
+- ``train``: all training data, regions simulated the same way;
+- ``full``: evaluation data with the real regions. Its record is restricted:
+  set ``BACTERIA_DATA_TOKEN`` to download it.
+
+Raw release files go to ``get_data_path("bacteria_raw")``::
+
+    read_count_<tag>.parquet          (gene x run) observations, ``readcount``
+    feature_annotation_<tag>.csv      gene table, ``log_length_ratio``
+    condition_annotation_<tag>.csv    run table, ``log_size_factor``
+
+with ``tag`` = ``debug`` / ``train`` / ``global``. The prepared layout, under
+``get_data_path("bacteria") / mode`` (on the competition worker the image sets
+``BENCHOPT_DATA_HOME`` and the ``full`` layout is staged there, read-only)::
+
+    {train, A, B, C, D}.parquet       observations + offsets + ``readcount``
+    feature_annotation.csv
+    condition_annotation.csv
+    genomes/                          optional GenBank genomes
 """
 
-from pathlib import Path
 import pandas as pd
 from benchopt import BaseDataset
 from benchopt.config import get_data_path
 
-ID_FEATURES = [
-    "genome_id",
-    "feature_id",
-    "run_accession",
-    "gene_uid",
-    "condition_uid",
-]
+from benchmark_utils.download import download_zenodo
+from benchmark_utils.split import REGIONS, split_release
+
+# Public record: debug + train releases. Restricted record: global release.
+PUBLIC_RECORD = "23105231"
+PRIVATE_RECORD = "23105231"
+TOKEN_ENV = "BACTERIA_DATA_TOKEN"
+RELEASE_TAG = {"debug": "debug", "train": "train", "full": "global"}
+
+ID_FEATURES = ["genome_id", "feature_id", "run_accession"]
 NUMERIC_FEATURES = ["log_length_ratio", "log_size_factor"]
 GENE_METADATA_FEATURES = [
     "species",
@@ -52,76 +64,51 @@ class Dataset(BaseDataset):
         "mode": ["debug"],
     }
 
+    # The split only depends on ``mode``; simulated regions use a fixed seed.
+    prepare_cache_ignore = ("base_seed",)
+
+    def prepare(self):
+        tag = RELEASE_TAG[self.mode]
+        names = [f"read_count_{tag}.parquet", f"feature_annotation_{tag}.csv",
+                 f"condition_annotation_{tag}.csv"]
+        raw = get_data_path("bacteria_raw")
+        record = PRIVATE_RECORD if self.mode == "full" else PUBLIC_RECORD
+        download_zenodo(record, names, raw, TOKEN_ENV)
+
+        frames, feat_df, cond_df = split_release(
+            pd.read_parquet(raw / names[0]),
+            pd.read_csv(raw / names[1]),
+            pd.read_csv(raw / names[2]),
+            simulate=self.mode != "full",
+        )
+        root = get_data_path("bacteria") / self.mode
+        root.mkdir(parents=True, exist_ok=True)
+        feat_df.to_csv(root / "feature_annotation.csv", index=False)
+        cond_df.to_csv(root / "condition_annotation.csv", index=False)
+        for name, df in frames.items():
+            df.to_parquet(root / f"{name}.parquet")
+
     def get_data(self):
-        root = get_data_path("gene_expression")
-        if not root.exists():
-            local_fallback = (
-                Path(__file__).resolve().parents[2]
-                / "phases/main/input_data/data/gene_expression"
-            )
-            if local_fallback.exists():
-                root = local_fallback
-            else:
-                raise SystemExit(
-                    f"[BacterialExpression] no data at {root}. "
-                    "Generate it with "
-                    f"`python tools/setup_data.py --mode {self.mode}`."
-                )
-
-        mode_dir = root / self.mode
-        data_dir = mode_dir if mode_dir.exists() else root
-
-        train_path = data_dir / "train_data.tsv"
-        if not train_path.exists():
-            raise SystemExit(
-                f"[BacterialExpression] missing {train_path} "
-                f"for mode '{self.mode}'. "
-                f"Run `python tools/setup_data.py --mode {self.mode}` first."
-            )
-        train_df = pd.read_csv(train_path, sep="\t")
-
-        cond_path = data_dir / "condition_annotations.tsv"
-        samples_df = (
-            pd.read_csv(cond_path, sep="\t") if cond_path.exists() else None
-        )
-
-        feat_path = data_dir / "feature_annotations.tsv"
-        feat_df = (
-            pd.read_csv(feat_path, sep="\t") if feat_path.exists() else None
-        )
-
-        genomes_dir = data_dir / "genomes"
-        if not (genomes_dir.exists() and any(genomes_dir.iterdir())):
-            root_genomes = root / "genomes"
-            genomes_dir = (
-                root_genomes
-                if (root_genomes.exists() and any(root_genomes.iterdir()))
-                else None
-            )
+        root = get_data_path("bacteria") / self.mode
+        # ``benchopt run`` does not call ``prepare``: run it on first use.
+        if not (root / "train.parquet").exists():
+            self.prepare()
 
         test_sets = {}
-        for split_name in ("A", "B", "C", "D"):
-            split_dir = data_dir / split_name
-            t_data = split_dir / "test_data.tsv"
-            t_lab = split_dir / "labels.csv"
-            if t_data.is_file() and t_lab.is_file():
-                df_test = pd.read_csv(t_data, sep="\t")
-                counts = pd.read_csv(t_lab)["readcount"].to_numpy(dtype=float)
-                test_sets[split_name] = (df_test, counts)
-
-        if not test_sets:
-            raise SystemExit(
-                f"[BacterialExpression] No test splits found in {data_dir} "
-                f"for mode '{self.mode}'."
-            )
-
+        for name in REGIONS:
+            df = pd.read_parquet(root / f"{name}.parquet")
+            test_sets[name] = (df.drop(columns="readcount"),
+                               df["readcount"].to_numpy(dtype=float))
+        cond_df = pd.read_csv(root / "condition_annotation.csv")
+        genomes_dir = root / "genomes"
         return dict(
-            train_df=train_df,
-            samples_df=samples_df,
-            genomes_dir=genomes_dir,
+            train_df=pd.read_parquet(root / "train.parquet"),
+            samples_df=cond_df,
+            genomes_dir=genomes_dir if genomes_dir.is_dir() else None,
             test_sets=test_sets,
-            feature_annotations=feat_df,
-            condition_annotations=samples_df,
+            feature_annotations=pd.read_csv(
+                root / "feature_annotation.csv"),
+            condition_annotations=cond_df,
             id_features=ID_FEATURES,
             numeric_features=NUMERIC_FEATURES,
             gene_metadata_features=GENE_METADATA_FEATURES,
