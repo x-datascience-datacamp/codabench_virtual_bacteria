@@ -1,20 +1,14 @@
-*.csv
 .DS_Store
 *.pyc
 __pycache__/
-*.xml
 *.zip
-ingestion_res/*
-scoring_res/*
-dev_phase/*
+# benchopt run outputs and caches
 outputs/
 __cache__/
 .pytest_cache/
-# generated phase data (written by tools/setup_data.py)
-phases/**/input_data/data/
+# local data home (benchopt prepare output)
+data/
+# local bundle / ingestion / scoring test runs
+_bundle/
 ingestion_res/
 scoring_res/
-_bundle/
-.claude/
-# do not include data folder
-data/

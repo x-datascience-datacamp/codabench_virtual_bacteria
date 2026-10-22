@@ -33,7 +33,7 @@ from benchmark_utils.split import (  # noqa: E402
     STATUS_COLS, assign_regions, simulate_status,
 )
 
-DEMO_DIR = Path("phases/main/input_data/data/bacteria_raw")
+DEMO_DIR = Path("benchmark/data/bacteria_raw")
 RELEASES = {"debug": "public", "train": "public", "full": "private"}
 
 

@@ -25,7 +25,7 @@ jobs:
           pip install -U pip flake8 pytest
           pip install -r requirements.txt
       - name: Lint
-        run: flake8 . --max-line-length=79 --exclude=.git,worktrees
+        run: flake8 . --max-line-length=79 --exclude=.git,worktrees,__cache__
       - name: benchopt design tests
         run: benchopt test benchmark --skip-install
       - name: Smoke run on Simulated
@@ -37,7 +37,6 @@ jobs:
           python tools/setup_data.py --demo
           python tools/create_bundle.py
           python -c "import zipfile; zipfile.ZipFile('bundle.zip').extractall('_bundle')"
-          export BENCHOPT_DATA_HOME=$PWD/phases/main/input_data/data
           benchopt prepare benchmark --config phases/main/input_data/config.yaml
           python _bundle/ingestion_program/ingestion.py \
             --submission-dir _bundle/solution \
