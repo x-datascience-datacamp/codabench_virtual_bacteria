@@ -6,8 +6,7 @@ to predict RNA-seq expression `counts` for a gene × sample observation from its
 genome sequence, gene description and experimental (environment) metadata, and
 to **generalize to held-out bacterial species**.
 
-See [`design.md`](design.md) for the full design and decision record, and
-`gene_expression_getting_started.ipynb` for an end-to-end walkthrough.
+See `gene_expression_getting_started.ipynb` for an end-to-end walkthrough.
 
 ## The benchmark (`benchmark/`)
 
