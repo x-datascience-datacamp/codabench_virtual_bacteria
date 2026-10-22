@@ -38,6 +38,7 @@ jobs:
           python tools/create_bundle.py
           python -c "import zipfile; zipfile.ZipFile('bundle.zip').extractall('_bundle')"
           export BENCHOPT_DATA_HOME=$PWD/phases/main/input_data/data
+          benchopt prepare benchmark --config phases/main/input_data/config.yaml
           python _bundle/ingestion_program/ingestion.py \
             --submission-dir _bundle/solution \
             --input-data _bundle/main_phase/input_data \

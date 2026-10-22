@@ -12,11 +12,11 @@ the train / A / B / C / D split (``benchmark_utils.split``)::
 
 Raw release files go to ``get_data_path("bacteria_raw")``::
 
-    read_count_<tag>.parquet          (gene x run) observations, ``readcount``
-    feature_annotation_<tag>.csv      gene table, ``log_length_ratio``
-    condition_annotation_<tag>.csv    run table, ``log_size_factor``
+    read_count_<mode>.parquet          (gene x run) observations, ``readcount``
+    feature_annotation_<mode>.csv      gene table, ``log_length_ratio``
+    condition_annotation_<mode>.csv    run table, ``log_size_factor``
 
-with ``tag`` = ``debug`` / ``train`` / ``global``. The prepared layout, under
+The prepared layout, under
 ``get_data_path("bacteria") / mode`` (on the competition worker the image sets
 ``BENCHOPT_DATA_HOME`` and the ``full`` layout is staged there, read-only)::
 
@@ -33,11 +33,10 @@ from benchopt.config import get_data_path
 from benchmark_utils.download import download_zenodo
 from benchmark_utils.split import REGIONS, split_release
 
-# Public record: debug + train releases. Restricted record: global release.
+# Public record: debug + train releases. Restricted record: full release.
 PUBLIC_RECORD = "23105231"
 PRIVATE_RECORD = "23105231"
 TOKEN_ENV = "BACTERIA_DATA_TOKEN"
-RELEASE_TAG = {"debug": "debug", "train": "train", "full": "global"}
 
 ID_FEATURES = ["genome_id", "feature_id", "run_accession"]
 NUMERIC_FEATURES = ["log_length_ratio", "log_size_factor"]
@@ -64,13 +63,10 @@ class Dataset(BaseDataset):
         "mode": ["debug"],
     }
 
-    # The split only depends on ``mode``; simulated regions use a fixed seed.
-    prepare_cache_ignore = ("base_seed",)
-
     def prepare(self):
-        tag = RELEASE_TAG[self.mode]
-        names = [f"read_count_{tag}.parquet", f"feature_annotation_{tag}.csv",
-                 f"condition_annotation_{tag}.csv"]
+        names = [f"read_count_{self.mode}.parquet",
+                 f"feature_annotation_{self.mode}.csv",
+                 f"condition_annotation_{self.mode}.csv"]
         raw = get_data_path("bacteria_raw")
         record = PRIVATE_RECORD if self.mode == "full" else PUBLIC_RECORD
         download_zenodo(record, names, raw, TOKEN_ENV)
@@ -90,9 +86,14 @@ class Dataset(BaseDataset):
 
     def get_data(self):
         root = get_data_path("bacteria") / self.mode
-        # ``benchopt run`` does not call ``prepare``: run it on first use.
         if not (root / "train.parquet").exists():
-            self.prepare()
+            # prepare's cache does not check its output: --force if the
+            # data was deleted or BENCHOPT_DATA_HOME changed.
+            raise SystemExit(
+                f"[BacterialExpression] no data at {root}. Run `benchopt "
+                "prepare benchmark -d "
+                f"\"BacterialExpression[mode={self.mode}]\" --force`."
+            )
 
         test_sets = {}
         for name in REGIONS:

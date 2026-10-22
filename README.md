@@ -41,14 +41,10 @@ The self-contained benchopt benchmark — run it directly with
 ```bash
 pip install -r requirements.txt
 
-# 1. real data (downloaded on first use), regions simulated from training
+# download the data, then score on regions simulated from training
+# (mode=train for all the training data)
+benchopt prepare benchmark -d "BacterialExpression[mode=debug]"
 benchopt run benchmark -d "BacterialExpression[mode=debug]" \
-    -s solution/submission.py
-
-# 2. or a synthetic release, run exactly as the platform does (mode=full)
-python tools/setup_data.py --demo
-BENCHOPT_DATA_HOME=phases/main/input_data/data \
-    benchopt run benchmark --config phases/main/input_data/config.yaml \
     -s solution/submission.py
 
 # design-level tests + zero-dependency smoke test
@@ -66,8 +62,3 @@ The bundle ships only the config + programs + pages. The **benchmark** is baked
 into the Docker image (`/compet/benchmark`), and the **data** (including the
 sealed private split) is staged separately onto the compute worker at
 `$BENCHOPT_DATA_HOME` (`/app/data`), so neither enters the public artifact.
-`python tools/setup_data.py --release <csv-folder>` builds the release files
-to upload: `release/public/` (debug + train, no split information) and
-`release/private/` (global, real regions) for the restricted record. Stage the
-worker data with `benchopt prepare benchmark -d "BacterialExpression[mode=full]"`
-(`BACTERIA_DATA_TOKEN` set) and copy `<data_home>/bacteria/full/` to it.

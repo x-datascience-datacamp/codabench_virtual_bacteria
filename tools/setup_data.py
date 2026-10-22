@@ -1,19 +1,19 @@
 """Build the data release files read by the ``BacterialExpression`` dataset.
 
-Release files, for each ``tag`` in ``debug`` / ``train`` / ``global``::
+Release files, for each ``mode`` in ``debug`` / ``train`` / ``full``::
 
-    read_count_<tag>.parquet
-    feature_annotation_<tag>.csv
-    condition_annotation_<tag>.csv
+    read_count_<mode>.parquet
+    feature_annotation_<mode>.csv
+    condition_annotation_<mode>.csv
 
 ``--release SRC`` converts the organizers' CSV tables found in ``SRC``
-(``read_count_<tag>.csv`` and the two annotation CSVs) into ``OUT/public``
+(``read_count_<mode>.csv`` and the two annotation CSVs) into ``OUT/public``
 (``debug`` and ``train``, split statuses dropped) and ``OUT/private``
-(``global``, with the real statuses), ready to upload to the public and the
+(``full``, with the real statuses), ready to upload to the public and the
 restricted Zenodo records. Read counts are streamed, so the multi-GB tables
 never sit in memory.
 
-``--demo`` writes a tiny synthetic ``debug`` and ``global`` release straight
+``--demo`` writes a tiny synthetic ``debug`` and ``full`` release straight
 into the benchmark data folder, so ``prepare`` runs offline (CI, smoke tests).
 """
 
@@ -34,7 +34,7 @@ from benchmark_utils.split import (  # noqa: E402
 )
 
 DEMO_DIR = Path("phases/main/input_data/data/bacteria_raw")
-RELEASES = {"debug": "public", "train": "public", "global": "private"}
+RELEASES = {"debug": "public", "train": "public", "full": "private"}
 
 
 def convert_read_counts(src, dest, keep_status):
@@ -60,18 +60,18 @@ def convert_read_counts(src, dest, keep_status):
 
 
 def make_release(src, out):
-    for tag, access in RELEASES.items():
+    for mode, access in RELEASES.items():
         keep_status = access == "private"
         dest = out / access
         dest.mkdir(parents=True, exist_ok=True)
         for kind in ("feature_annotation", "condition_annotation"):
-            df = pd.read_csv(src / f"{kind}_{tag}.csv")
+            df = pd.read_csv(src / f"{kind}_{mode}.csv")
             if not keep_status:
                 df = df.drop(columns=STATUS_COLS, errors="ignore")
-            df.to_csv(dest / f"{kind}_{tag}.csv", index=False)
-        convert_read_counts(src / f"read_count_{tag}.csv",
-                            dest / f"read_count_{tag}.parquet", keep_status)
-        print(f"[setup_data] wrote {tag} release to {dest}")
+            df.to_csv(dest / f"{kind}_{mode}.csv", index=False)
+        convert_read_counts(src / f"read_count_{mode}.csv",
+                            dest / f"read_count_{mode}.parquet", keep_status)
+        print(f"[setup_data] wrote {mode} release to {dest}")
 
 
 def make_demo(out, seed=0):
@@ -100,7 +100,7 @@ def make_demo(out, seed=0):
     obs = obs[["species", "genome_id", "feature_id", "run_accession",
                "readcount"]]
 
-    # Real-like statuses for the global release, drawn with another seed
+    # Real-like statuses for the full release, drawn with another seed
     # than the simulated debug split.
     feat_g = simulate_status(feat_df, seed=seed + 1)
     cond_g = simulate_status(cond_df, seed=seed + 1)
@@ -109,11 +109,11 @@ def make_demo(out, seed=0):
                            feat_g, cond_g)
 
     out.mkdir(parents=True, exist_ok=True)
-    for tag, (o, f, c) in {"debug": (obs, feat_df, cond_df),
-                           "global": (obs_g, feat_g, cond_g)}.items():
-        o.to_parquet(out / f"read_count_{tag}.parquet")
-        f.to_csv(out / f"feature_annotation_{tag}.csv", index=False)
-        c.to_csv(out / f"condition_annotation_{tag}.csv", index=False)
+    for mode, (o, f, c) in {"debug": (obs, feat_df, cond_df),
+                            "full": (obs_g, feat_g, cond_g)}.items():
+        o.to_parquet(out / f"read_count_{mode}.parquet")
+        f.to_csv(out / f"feature_annotation_{mode}.csv", index=False)
+        c.to_csv(out / f"condition_annotation_{mode}.csv", index=False)
     print(f"[setup_data] wrote demo release to {out}, regions: "
           f"{obs_g['status'].value_counts().to_dict()}")
 
