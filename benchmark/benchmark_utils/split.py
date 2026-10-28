@@ -47,7 +47,10 @@ def attach(obs, table, keys, cols):
     instead of strings, which matters for the ~1e8-row ``train`` release.
     """
     table = table[keys + cols].astype({k: obs[k].dtype for k in keys})
-    return obs.merge(table, on=keys, how="left")
+    # Keys absent from obs cast to NaN. A duplicated key would duplicate its
+    # observations.
+    return obs.merge(table.dropna(subset=keys), on=keys, how="left",
+                     validate="many_to_one")
 
 
 def assign_regions(obs, feat_df, cond_df):

@@ -13,12 +13,14 @@ Release files, for each ``mode`` in ``debug`` / ``train`` / ``full``::
 restricted Zenodo records. Read counts are streamed, so the multi-GB tables
 never sit in memory.
 
-``--demo`` writes a tiny synthetic ``debug`` and ``full`` release straight
-into the benchmark data folder, so ``prepare`` runs offline (CI, smoke tests).
+``--demo`` writes a tiny synthetic ``debug`` and ``full`` release, genomes
+included, straight into the benchmark data folder, so ``prepare`` runs
+offline (CI, smoke tests).
 """
 
 import argparse
 import sys
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -109,6 +111,13 @@ def make_demo(out, seed=0):
                            feat_g, cond_g)
 
     out.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(out / "genomes.zip", "w") as z:
+        for gid in genomes["genome_id"]:
+            seq = "".join(rng.choice(list("acgt"), 600))
+            z.writestr(f"genomes/{gid}.gbff",
+                       f"LOCUS       contig_1{len(seq):>21} bp    DNA     "
+                       "linear   BCT 01-JAN-2026\n"
+                       f"ORIGIN\n        1 {seq}\n//\n")
     for mode, (o, f, c) in {"debug": (obs, feat_df, cond_df),
                             "full": (obs_g, feat_g, cond_g)}.items():
         o.to_parquet(out / f"read_count_{mode}.parquet")

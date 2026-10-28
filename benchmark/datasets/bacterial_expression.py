@@ -1,7 +1,8 @@
 """Multi-species bacterial transcriptomics dataset, A/B/C/D test regions.
 
-``prepare`` downloads the release files of ``mode`` from Zenodo, then writes
-the train / A / B / C / D split (``benchmark_utils.split``)::
+``prepare`` downloads the release files of ``mode`` and the genomes from
+Zenodo, then writes the train / A / B / C / D split
+(``benchmark_utils.split``)::
 
     benchopt prepare benchmark -d "BacterialExpression[mode=train]"
 
@@ -15,6 +16,7 @@ Raw release files go to ``get_data_path("bacteria_raw")``::
     read_count_<mode>.parquet          (gene x run) observations, ``readcount``
     feature_annotation_<mode>.csv      gene table, ``log_length_ratio``
     condition_annotation_<mode>.csv    run table, ``log_size_factor``
+    genomes.zip                        ``genomes/<genome_id>.gbff``
 
 The prepared layout, under
 ``get_data_path("bacteria") / mode`` (on the competition worker the image sets
@@ -23,8 +25,15 @@ The prepared layout, under
     {train, A, B, C, D}.parquet       observations + offsets + ``readcount``
     feature_annotation.csv
     condition_annotation.csv
-    genomes/                          optional GenBank genomes
+
+and the GenBank genomes, shared by every mode, in
+``get_data_path("bacteria") / "genomes"``: one ``<genome_id>.gbff`` per
+genome. The gene table's ``Chr`` is a record's VERSION (RefSeq) or LOCUS
+name (``contig_<i>``, repeated across genomes).
 """
+
+import shutil
+import zipfile
 
 import pandas as pd
 from benchopt import BaseDataset
@@ -33,10 +42,12 @@ from benchopt.config import get_data_path
 from benchmark_utils.download import download_zenodo
 from benchmark_utils.split import REGIONS, split_release
 
-# Public record: debug + train releases. Restricted record: full release.
+# Public record: debug + train releases and the genomes. Restricted record:
+# full release.
 PUBLIC_RECORD = "23105231"
 PRIVATE_RECORD = "23105231"
 TOKEN_ENV = "BACTERIA_DATA_TOKEN"
+GENOMES = "genomes.zip"
 
 ID_FEATURES = ["genome_id", "feature_id", "run_accession"]
 NUMERIC_FEATURES = ["log_length_ratio", "log_size_factor"]
@@ -79,6 +90,14 @@ class Dataset(BaseDataset):
         )
         root = get_data_path("bacteria") / self.mode
         root.mkdir(parents=True, exist_ok=True)
+        genomes = root.parent / "genomes"
+        if not genomes.is_dir():
+            download_zenodo(PUBLIC_RECORD, [GENOMES], raw, TOKEN_ENV)
+            tmp = root.parent / "genomes.part"
+            shutil.rmtree(tmp, ignore_errors=True)
+            zipfile.ZipFile(raw / GENOMES).extractall(tmp)
+            (tmp / "genomes").rename(genomes)
+            tmp.rmdir()
         feat_df.to_csv(root / "feature_annotation.csv", index=False)
         cond_df.to_csv(root / "condition_annotation.csv", index=False)
         for name, df in frames.items():
@@ -101,7 +120,7 @@ class Dataset(BaseDataset):
             test_sets[name] = (df.drop(columns="readcount"),
                                df["readcount"].to_numpy(dtype=float))
         cond_df = pd.read_csv(root / "condition_annotation.csv")
-        genomes_dir = root / "genomes"
+        genomes_dir = root.parent / "genomes"
         return dict(
             train_df=pd.read_parquet(root / "train.parquet"),
             samples_df=cond_df,

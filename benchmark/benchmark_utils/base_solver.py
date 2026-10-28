@@ -27,8 +27,9 @@ pandas DataFrames / a genomes directory path:
 - ``train_df`` / ``test_df`` : one row per (gene x sample) observation;
 - ``samples_df``            : experimental metadata, join key ``Run``
                               matched to observations' ``run_accession``;
-- ``genomes_dir``           : folder of GenBank ``.gb`` genome files (may be
-                              ``None`` on the synthetic dataset).
+- ``genomes_dir``           : folder of GenBank genomes, one
+                              ``<genome_id>.gbff`` each (``None`` on the
+                              synthetic dataset).
 """
 
 import inspect
