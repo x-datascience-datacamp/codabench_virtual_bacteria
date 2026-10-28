@@ -15,7 +15,9 @@ Raw release files go to ``get_data_path("bacteria_raw")``::
 
     read_count_<mode>.parquet          (gene x run) observations, ``readcount``
     feature_annotation_<mode>.csv      gene table, ``log_length_ratio``
-    condition_annotation_<mode>.csv    run table, ``log_size_factor``
+    condition_annotation_<mode>.csv    run table, ``log_size_factor`` and
+                                       the curated conditions (medium,
+                                       temperature, pH, perturbation...)
     genomes.zip                        ``genomes/<genome_id>.gbff``
     genomes_debug.zip                  the ``debug`` genome only
 
@@ -64,7 +66,6 @@ GENE_METADATA_FEATURES = [
     "homology",
     "on_contig_edge",
 ]
-CONDITION_METADATA_FEATURES = ["species", "prj_accession"]
 
 
 class Dataset(BaseDataset):
@@ -138,5 +139,7 @@ class Dataset(BaseDataset):
             id_features=ID_FEATURES,
             numeric_features=NUMERIC_FEATURES,
             gene_metadata_features=GENE_METADATA_FEATURES,
-            condition_metadata_features=CONDITION_METADATA_FEATURES,
+            condition_metadata_features=[
+                c for c in cond_df.columns
+                if c not in ID_FEATURES + NUMERIC_FEATURES],
         )

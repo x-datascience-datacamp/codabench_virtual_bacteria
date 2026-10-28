@@ -10,11 +10,12 @@ and the GenBank genomes, ``genomes.zip`` and ``genomes_debug.zip`` (the
 ``debug`` genome only).
 
 ``--release SRC`` converts the organizers' files found in ``SRC``
-(``read_count_<mode>.csv``, the two annotation CSVs and ``genomes.zip``)
-into ``OUT/public`` (``debug`` and ``train``, split statuses dropped, and
-the genomes) and ``OUT/private`` (``full``, with the real statuses), ready
-to upload to the public and the restricted Zenodo records. Read counts are
-streamed, so the multi-GB tables never sit in memory.
+(``read_count_<mode>.csv``, the two annotation CSVs, ``genomes.zip``, the
+curated conditions ``experiment.zip`` and ``run_to_experiment.csv``) into
+``OUT/public`` (``debug`` and ``train``, split statuses dropped, the genomes
+and ``experiment.zip``) and ``OUT/private`` (``full``, with the real statuses),
+ready to upload to the public and the restricted Zenodo records. Read counts
+are streamed, so the multi-GB tables never sit in memory.
 
 ``--demo`` writes a tiny synthetic ``debug`` and ``full`` release, genomes
 included, straight into the benchmark data folder, so ``prepare`` runs
@@ -22,6 +23,7 @@ offline (CI, smoke tests).
 """
 
 import argparse
+import json
 import shutil
 import sys
 import zipfile
@@ -40,6 +42,22 @@ from benchmark_utils.split import (  # noqa: E402
 )
 
 DEMO_DIR = Path("benchmark/data/bacteria_raw")
+# Run table column: (section, field) of an experiment in experiment.zip.
+CONDITION_FIELDS = {
+    "is_wild_type": ("strain", "is_wild_type"),
+    "medium_category": ("growth_medium", "medium_category"),
+    "medium_name": ("growth_medium", "base_medium_name"),
+    "temperature_celsius": ("cultivation", "temperature_celsius"),
+    "ph": ("cultivation", "ph"),
+    "oxygen_condition": ("cultivation", "oxygen_condition"),
+    "agitation_rpm": ("cultivation", "agitation_rpm"),
+    "growth_mode": ("cultivation", "growth_mode"),
+    "growth_phase": ("sampling_point", "growth_phase"),
+    "od600": ("sampling_point", "optical_density_od600"),
+    "has_perturbation": ("perturbation", "has_perturbation"),
+    "perturbation_category": ("perturbation", "perturbation_category"),
+    "perturbation_compound": ("perturbation", "stressor_or_compound"),
+}
 RELEASES = {"debug": "public", "train": "public", "full": "private"}
 
 
@@ -72,6 +90,8 @@ def make_release(src, out):
         dest.mkdir(parents=True, exist_ok=True)
         for kind in ("feature_annotation", "condition_annotation"):
             df = pd.read_csv(src / f"{kind}_{mode}.csv")
+            if kind == "condition_annotation":
+                df = add_conditions(df, src)
             if not keep_status:
                 df = df.drop(columns=STATUS_COLS, errors="ignore")
             df.to_csv(dest / f"{kind}_{mode}.csv", index=False)
@@ -79,6 +99,41 @@ def make_release(src, out):
                             dest / f"read_count_{mode}.parquet", keep_status)
         print(f"[setup_data] wrote {mode} release to {dest}")
     write_genomes(src, out / "public")
+    shutil.copy(src / "experiment.zip", out / "public")
+
+
+def add_conditions(cond_df, src):
+    """Join the curated conditions of each run, ``unknown`` left empty.
+
+    ``experiment.zip`` holds one JSON per BioProject, keyed by experiment
+    accession, and ``run_to_experiment.csv`` maps the runs to them. An
+    experiment listed in several BioProjects takes its run's.
+    """
+    rows = []
+    with zipfile.ZipFile(src / "experiment.zip") as z:
+        for name in z.namelist():
+            if not name.endswith(".json"):
+                continue
+            project = json.loads(z.read(name))
+            for e in project["experiments"]:
+                rows.append({
+                    "experiment_accession": e["experiment_accession"],
+                    "json_prj": project["bioproject_id"],
+                    "condition_confidence": e["confidence_score"],
+                    **{col: e[sec][key]
+                       for col, (sec, key) in CONDITION_FIELDS.items()},
+                })
+    runs = pd.read_csv(src / "run_to_experiment.csv",
+                       usecols=["run_accession", "experiment_accession"])
+    meta = (cond_df[["run_accession", "prj_accession"]]
+            .merge(runs.drop_duplicates("run_accession"), how="left")
+            .merge(pd.DataFrame(rows).replace("unknown", None), how="left"))
+    meta = (meta.assign(other=meta["json_prj"] != meta["prj_accession"])
+            .sort_values("other", kind="stable")
+            .drop_duplicates("run_accession")
+            .drop(columns=["prj_accession", "json_prj", "other"]))
+    return cond_df.merge(meta, on="run_accession", how="left",
+                         validate="one_to_one")
 
 
 def write_genomes(src, dest):
@@ -110,6 +165,9 @@ def make_demo(out, seed=0):
     cond_df["prj_accession"] = "PRJNA001"
     cond_df["run_accession"] = [f"SRR{i:07d}" for i in range(80)]
     cond_df["log_size_factor"] = rng.normal(0.0, 0.3, 80)
+    cond_df["medium_category"] = rng.choice(
+        ["complex_rich", "minimal_defined", None], 80)
+    cond_df["temperature_celsius"] = rng.choice([30.0, 37.0, np.nan], 80)
 
     obs = cond_df.merge(feat_df, on=["species", "genome_id"])
     log_mu = 4.0 + obs["log_length_ratio"] + obs["log_size_factor"]
