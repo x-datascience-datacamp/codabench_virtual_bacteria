@@ -17,6 +17,7 @@ Raw release files go to ``get_data_path("bacteria_raw")``::
     feature_annotation_<mode>.csv      gene table, ``log_length_ratio``
     condition_annotation_<mode>.csv    run table, ``log_size_factor``
     genomes.zip                        ``genomes/<genome_id>.gbff``
+    genomes_debug.zip                  the ``debug`` genome only
 
 The prepared layout, under
 ``get_data_path("bacteria") / mode`` (on the competition worker the image sets
@@ -91,13 +92,18 @@ class Dataset(BaseDataset):
         root = get_data_path("bacteria") / self.mode
         root.mkdir(parents=True, exist_ok=True)
         genomes = root.parent / "genomes"
-        if not genomes.is_dir():
-            download_zenodo(PUBLIC_RECORD, [GENOMES], raw, TOKEN_ENV)
+        # debug only needs its own genome, not the 750 MB archive.
+        zip_name = "genomes_debug.zip" if self.mode == "debug" else GENOMES
+        if not all((genomes / f"{g}.gbff").exists()
+                   for g in feat_df["genome_id"].unique()):
+            download_zenodo(PUBLIC_RECORD, [zip_name], raw, TOKEN_ENV)
             tmp = root.parent / "genomes.part"
             shutil.rmtree(tmp, ignore_errors=True)
-            zipfile.ZipFile(raw / GENOMES).extractall(tmp)
-            (tmp / "genomes").rename(genomes)
-            tmp.rmdir()
+            zipfile.ZipFile(raw / zip_name).extractall(tmp)
+            genomes.mkdir(exist_ok=True)
+            for path in (tmp / "genomes").iterdir():
+                path.replace(genomes / path.name)
+            shutil.rmtree(tmp)
         feat_df.to_csv(root / "feature_annotation.csv", index=False)
         cond_df.to_csv(root / "condition_annotation.csv", index=False)
         for name, df in frames.items():

@@ -6,12 +6,15 @@ Release files, for each ``mode`` in ``debug`` / ``train`` / ``full``::
     feature_annotation_<mode>.csv
     condition_annotation_<mode>.csv
 
-``--release SRC`` converts the organizers' CSV tables found in ``SRC``
-(``read_count_<mode>.csv`` and the two annotation CSVs) into ``OUT/public``
-(``debug`` and ``train``, split statuses dropped) and ``OUT/private``
-(``full``, with the real statuses), ready to upload to the public and the
-restricted Zenodo records. Read counts are streamed, so the multi-GB tables
-never sit in memory.
+and the GenBank genomes, ``genomes.zip`` and ``genomes_debug.zip`` (the
+``debug`` genome only).
+
+``--release SRC`` converts the organizers' files found in ``SRC``
+(``read_count_<mode>.csv``, the two annotation CSVs and ``genomes.zip``)
+into ``OUT/public`` (``debug`` and ``train``, split statuses dropped, and
+the genomes) and ``OUT/private`` (``full``, with the real statuses), ready
+to upload to the public and the restricted Zenodo records. Read counts are
+streamed, so the multi-GB tables never sit in memory.
 
 ``--demo`` writes a tiny synthetic ``debug`` and ``full`` release, genomes
 included, straight into the benchmark data folder, so ``prepare`` runs
@@ -19,6 +22,7 @@ offline (CI, smoke tests).
 """
 
 import argparse
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -74,6 +78,19 @@ def make_release(src, out):
         convert_read_counts(src / f"read_count_{mode}.csv",
                             dest / f"read_count_{mode}.parquet", keep_status)
         print(f"[setup_data] wrote {mode} release to {dest}")
+    write_genomes(src, out / "public")
+
+
+def write_genomes(src, dest):
+    """Copy ``genomes.zip`` and extract the debug genomes to their own zip."""
+    shutil.copy(src / "genomes.zip", dest)
+    ids = pd.read_csv(src / "feature_annotation_debug.csv",
+                      usecols=["genome_id"])["genome_id"].unique()
+    with zipfile.ZipFile(src / "genomes.zip") as full, zipfile.ZipFile(
+            dest / "genomes_debug.zip", "w", zipfile.ZIP_DEFLATED) as z:
+        for gid in ids:
+            name = f"genomes/{gid}.gbff"
+            z.writestr(name, full.read(name))
 
 
 def make_demo(out, seed=0):
@@ -118,6 +135,7 @@ def make_demo(out, seed=0):
                        f"LOCUS       contig_1{len(seq):>21} bp    DNA     "
                        "linear   BCT 01-JAN-2026\n"
                        f"ORIGIN\n        1 {seq}\n//\n")
+    shutil.copy(out / "genomes.zip", out / "genomes_debug.zip")
     for mode, (o, f, c) in {"debug": (obs, feat_df, cond_df),
                             "full": (obs_g, feat_g, cond_g)}.items():
         o.to_parquet(out / f"read_count_{mode}.parquet")
