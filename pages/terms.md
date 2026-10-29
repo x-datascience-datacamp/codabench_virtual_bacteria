@@ -8,8 +8,8 @@ course. By participating you agree to the following.
    authored by your team.
 2. **No attempt to access the hidden data.** The private (held-out species)
    labels are used only for the final ranking. Any attempt to read, exfiltrate
-   or reverse-engineer them from the evaluation environment disqualifies the
-   submission.
+   or reverse-engineer them from the evaluation environment is cheating: it
+   results in a grade of 0 for the course and in failing the master.
 3. **Fair use of the platform.** Respect the per-day submission limit and the
    execution-time budget. Do not attempt to interfere with other participants'
    runs or the evaluation infrastructure.
