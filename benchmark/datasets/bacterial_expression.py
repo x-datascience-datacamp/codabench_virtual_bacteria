@@ -1,5 +1,8 @@
 """Multi-species bacterial transcriptomics dataset, A/B/C/D test regions.
 
+Each region is scored on a public and a hidden private half
+(``benchmark_utils.split.is_private``).
+
 ``prepare`` downloads the release files of ``mode`` and the genomes from
 Zenodo, then writes the train / A / B / C / D split
 (``benchmark_utils.split``)::
@@ -44,7 +47,7 @@ from benchopt import BaseDataset
 from benchopt.config import get_data_path
 
 from benchmark_utils.download import download_zenodo
-from benchmark_utils.split import REGIONS, split_release
+from benchmark_utils.split import REGIONS, is_private, split_release
 
 # Public record: debug + train releases, genomes and curated conditions,
 # read with the token of its share link while it is a draft. Restricted
@@ -132,11 +135,17 @@ class Dataset(BaseDataset):
                 f"\"BacterialExpression[mode={self.mode}]\" --force`."
             )
 
+        # The public half of each region under its name, the private one
+        # as ``<region>_private``.
         test_sets = {}
         for name in REGIONS:
             df = pd.read_parquet(root / f"{name}.parquet")
-            test_sets[name] = (df.drop(columns="readcount"),
-                               df["readcount"].to_numpy(dtype=float))
+            private = is_private(df, name)
+            for key, part in ((name, df[~private]),
+                              (f"{name}_private", df[private])):
+                part = part.reset_index(drop=True)
+                test_sets[key] = (part.drop(columns="readcount"),
+                                  part["readcount"].to_numpy(dtype=float))
         cond_df = pd.read_csv(root / "condition_annotation.csv")
         genomes_dir = root.parent / "genomes"
         return dict(

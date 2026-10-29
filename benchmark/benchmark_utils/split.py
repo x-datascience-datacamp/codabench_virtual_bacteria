@@ -15,6 +15,10 @@ new run only has its curated conditions.
 The evaluation release ships the real statuses. The student releases ship
 none, and ``simulate_status`` draws them with a fixed seed, so local scores
 follow the same protocol.
+
+Each region is then halved into a public part, shown on the leaderboard, and
+a hidden private part, which ranks: by run for A and C, by gene for B and D.
+A gene or a run falls in the same half in every region.
 """
 
 import numpy as np
@@ -31,6 +35,7 @@ REGION_TABLE = np.array([
 STATUS_COLS = ["feature_status", "run_status", "status"]
 GENE_KEYS = ["genome_id", "feature_id"]
 RUN_KEYS = ["genome_id", "run_accession"]
+HALF_KEYS = {"A": RUN_KEYS, "B": GENE_KEYS, "C": RUN_KEYS, "D": GENE_KEYS}
 
 
 def simulate_status(df, seed=42):
@@ -95,3 +100,9 @@ def split_release(obs, feat_df, cond_df, simulate):
     feat_df = feat_df.drop(columns=STATUS_COLS, errors="ignore")
     cond_df = cond_df.drop(columns=STATUS_COLS, errors="ignore")
     return frames, feat_df, cond_df
+
+
+def is_private(df, region):
+    """Whether each observation of ``region`` falls in its private half."""
+    keys = df[HALF_KEYS[region]]
+    return pd.util.hash_pandas_object(keys, index=False).to_numpy() % 2 == 1

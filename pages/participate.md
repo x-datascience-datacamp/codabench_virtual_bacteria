@@ -32,6 +32,12 @@ observations fall in four regions, from the easiest to the hardest:
 The ranking uses the NB-NLL averaged over A, B and C. D is shown for
 information.
 
+Each region is split in two halves: half of its new genes (B, D) or of its
+runs (A, C) go to a **public** half, the others to a **private** half. The
+leaderboard shows your scores on the public half. The final ranking uses the
+private half, hidden until the end of the challenge, so tuning your model to
+the leaderboard does not pay.
+
 ## What you submit
 
 A single **`submission.py`** defining `class Solver(GeneCompetSolver)`. All

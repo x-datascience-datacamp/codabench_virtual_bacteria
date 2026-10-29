@@ -13,3 +13,11 @@ scoring:
     nb_nll_B: objective_nb_nll_B
     nb_nll_C: objective_nb_nll_C
     nb_nll_D: objective_nb_nll_D
+    # Private columns (hidden on the leaderboard): the final ranking.
+    nb_nll_private: objective_nb_nll_challenge_private
+    mae_private: objective_mae_challenge_private
+    r2_private: objective_r2_challenge_private
+    nb_nll_A_private: objective_nb_nll_A_private
+    nb_nll_B_private: objective_nb_nll_B_private
+    nb_nll_C_private: objective_nb_nll_C_private
+    nb_nll_D_private: objective_nb_nll_D_private

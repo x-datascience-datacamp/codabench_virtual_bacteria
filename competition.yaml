@@ -50,8 +50,9 @@ phases:
   - index: 0
     name: Competition
     description: >
-      Build, train and submit your model. It is ranked by the NB-NLL averaged
-      over regions A, B and C.
+      Build, train and submit your model. The leaderboard shows the public half
+      of each region. The final ranking is the NB-NLL averaged over regions
+      A, B and C of the hidden private half.
     start: 2026-10-29 00:00:00
     end: 2027-02-01 00:00:00
     execution_time_limit: 3600
@@ -66,15 +67,15 @@ leaderboards:
   - title: Results
     key: main
     columns:
-      - title: NB-NLL (Challenge)
+      - title: NB-NLL (Challenge, public)
         key: nb_nll
         index: 0
         sorting: asc
-      - title: MAE (Challenge)
+      - title: MAE (Challenge, public)
         key: mae
         index: 1
         sorting: asc
-      - title: R2 (Challenge)
+      - title: R2 (Challenge, public)
         key: r2
         index: 2
         sorting: desc
@@ -94,7 +95,42 @@ leaderboards:
         key: nb_nll_D
         index: 6
         sorting: asc
+      - title: NB-NLL (Challenge, private)
+        key: nb_nll_private
+        index: 7
+        sorting: asc
+        hidden: True
+      - title: MAE (Challenge, private)
+        key: mae_private
+        index: 8
+        sorting: asc
+        hidden: True
+      - title: R2 (Challenge, private)
+        key: r2_private
+        index: 9
+        sorting: desc
+        hidden: True
+      - title: NB-NLL (A, private)
+        key: nb_nll_A_private
+        index: 10
+        sorting: asc
+        hidden: True
+      - title: NB-NLL (B, private)
+        key: nb_nll_B_private
+        index: 11
+        sorting: asc
+        hidden: True
+      - title: NB-NLL (C, private)
+        key: nb_nll_C_private
+        index: 12
+        sorting: asc
+        hidden: True
+      - title: NB-NLL (D, private)
+        key: nb_nll_D_private
+        index: 13
+        sorting: asc
+        hidden: True
       - title: Duration (s)
         key: duration
-        index: 7
+        index: 14
         sorting: asc

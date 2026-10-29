@@ -6,10 +6,11 @@ submission's model returns ``(mu, sigma)`` per observation; the ranking metric
 is the mean **Negative-Binomial NLL** (lower is better), with MAE / R^2 on
 ``log1p(counts)`` reported alongside.
 
-Evaluation runs on the held-out regions A to D (``benchmark_utils.split``).
-Metrics are emitted per region as ``objective_<metric>_<region>``, plus the
-``challenge`` mean over A, B and C. The phase config maps them to leaderboard
-keys.
+Evaluation runs on the held-out regions A to D (``benchmark_utils.split``),
+each halved into a public part and a hidden private part. Metrics are emitted
+per region as ``objective_<metric>_<region>`` (public) and
+``objective_<metric>_<region>_private``, plus the ``challenge`` mean over A,
+B and C of each half. The phase config maps them to leaderboard keys.
 
 The solver always trains on the platform: ``get_objective`` hands it the
 train data and resources, and its ``fit`` runs before evaluation.
@@ -65,19 +66,15 @@ class Objective(BaseObjective):
             scores[f"mae_{name}"] = log_mae(counts, mu)
             scores[f"r2_{name}"] = log_r2(counts, mu)
 
-        # Challenge leaderboard aggregation: equal weighting on A, B, and C
-        eval_splits = [k for k in ("A", "B", "C") if f"nb_nll_{k}" in scores]
-        if eval_splits:
-            scores["nb_nll_challenge"] = float(
-                sum(scores[f"nb_nll_{k}"] for k in eval_splits)
-                / len(eval_splits)
-            )
-            scores["mae_challenge"] = float(
-                sum(scores[f"mae_{k}"] for k in eval_splits) / len(eval_splits)
-            )
-            scores["r2_challenge"] = float(
-                sum(scores[f"r2_{k}"] for k in eval_splits) / len(eval_splits)
-            )
+        # Challenge aggregation: equal weighting on A, B and C, per half.
+        for half in ("", "_private"):
+            regions = [k + half for k in ("A", "B", "C")
+                       if f"nb_nll_{k}{half}" in scores]
+            for metric in ("nb_nll", "mae", "r2") if regions else ():
+                scores[f"{metric}_challenge{half}"] = float(
+                    sum(scores[f"{metric}_{r}"] for r in regions)
+                    / len(regions))
+        if "nb_nll_challenge" in scores:
             scores["value"] = scores["nb_nll_challenge"]
         elif scores:
             scores["value"] = next(iter(scores.values()))
