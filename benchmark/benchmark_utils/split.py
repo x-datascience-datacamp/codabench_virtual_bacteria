@@ -17,8 +17,9 @@ none, and ``simulate_status`` draws them with a fixed seed, so local scores
 follow the same protocol.
 
 Each region is then halved into a public part, shown on the leaderboard, and
-a hidden private part, which ranks: by run for A and C, by gene for B and D.
-A gene or a run falls in the same half in every region.
+a hidden private part, which ranks: by observation for A, whose genes and
+runs are all seen in training, by gene for B and D, by run for C. A new gene
+falls in the same half in B and D.
 """
 
 import numpy as np
@@ -35,7 +36,8 @@ REGION_TABLE = np.array([
 STATUS_COLS = ["feature_status", "run_status", "status"]
 GENE_KEYS = ["genome_id", "feature_id"]
 RUN_KEYS = ["genome_id", "run_accession"]
-HALF_KEYS = {"A": RUN_KEYS, "B": GENE_KEYS, "C": RUN_KEYS, "D": GENE_KEYS}
+HALF_KEYS = {"A": GENE_KEYS + ["run_accession"], "B": GENE_KEYS,
+             "C": RUN_KEYS, "D": GENE_KEYS}
 
 
 def simulate_status(df, seed=42):

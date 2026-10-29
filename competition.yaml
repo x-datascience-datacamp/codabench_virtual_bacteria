@@ -4,10 +4,11 @@ description: >
   Predict RNA-seq expression counts for a gene x sample observation from its
   genome sequence, gene description and experimental (environment) metadata.
   Submissions are code (a benchopt solver) that engineers features and trains
-  on the platform, outputting (mu, sigma) per observation; ranking is by mean
+  on the platform, outputting (mu, sigma) per observation. Ranking is by mean
   Negative-Binomial NLL, averaged over three held-out regions: a known gene
   in a known run never seen together (A), a new gene (B) and a new run (C).
-  Powered by benchopt.
+  The leaderboard shows a public half of each region, and the final ranking
+  uses the hidden private half. Powered by benchopt.
 image: logo.png
 registration_auto_approve: False
 
