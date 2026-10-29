@@ -35,6 +35,9 @@ jobs:
           benchopt run benchmark -d Simulated -s BaselineNN -s Constant \
             -r 1 --no-cache --no-plot --no-html --no-display
       - name: Build bundle + end-to-end ingestion + scoring (demo data)
+        # One data home for prepare and the bundled benchmark, as /app/data.
+        env:
+          BENCHOPT_DATA_HOME: ${{ github.workspace }}/benchmark/data
         run: |
           python tools/setup_data.py --demo
           python tools/create_bundle.py
