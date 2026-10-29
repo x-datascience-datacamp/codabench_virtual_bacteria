@@ -121,7 +121,10 @@ class CatBoostNBModel:
         X_cat_val = oe.transform(X_val[cat_cols])
         X_val_enc = np.column_stack([X_cat_val, X_val[num_cols].to_numpy()])
 
-        categorical_mask = [True, True, True, False, False]
+        # HistGradientBoosting bins at most 255 categories: larger id columns
+        # go in as ordinal codes.
+        categorical_mask = [len(c) <= 255 for c in oe.categories_] + [
+            False, False]
         hgb = HistGradientBoostingRegressor(
             max_iter=self.iterations,
             learning_rate=self.lr,
