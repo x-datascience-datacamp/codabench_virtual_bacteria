@@ -1,17 +1,15 @@
 """Fetch release files from a Zenodo record.
 
-A restricted record (or an unpublished draft) is read with the access token
-held in the ``token_env`` environment variable, when it is set.
+A restricted record, or an unpublished draft, is read with the token of its
+share link.
 """
 
-import os
 import shutil
 import urllib.request
 
 
-def download_zenodo(record, names, dest, token_env=None):
+def download_zenodo(record, names, dest, token=None):
     """Download the files ``names`` of ``record`` missing from ``dest``."""
-    token = os.environ.get(token_env) if token_env else None
     dest.mkdir(parents=True, exist_ok=True)
     for name in names:
         path = dest / name

@@ -35,6 +35,7 @@ genome. The gene table's ``Chr`` is a record's VERSION (RefSeq) or LOCUS
 name (``contig_<i>``, repeated across genomes).
 """
 
+import os
 import shutil
 import zipfile
 
@@ -45,10 +46,17 @@ from benchopt.config import get_data_path
 from benchmark_utils.download import download_zenodo
 from benchmark_utils.split import REGIONS, split_release
 
-# Public record: debug + train releases and the genomes. Restricted record:
-# full release.
-PUBLIC_RECORD = "23105231"
-PRIVATE_RECORD = "23105231"
+# Public record: debug + train releases, genomes and curated conditions,
+# read with the token of its share link while it is a draft. Restricted
+# record: full release.
+PUBLIC_RECORD = "23751267"
+PUBLIC_TOKEN = (
+    "eyJhbGciOiJIUzUxMiJ9.eyJpZCI6IjlhNTk5ZDg1LTIzNWItNDQ1NS1hYzkyLWJhNzFjM"
+    "zVkYTk4NiIsImRhdGEiOnt9LCJyYW5kb20iOiI2YWFkN2Y2ZGI3NTRiOWZkNDAyZDM2YWU"
+    "zZGNlNmNmMiJ9.hMs5tbqvZArD8nfn0Cirx7dLFU99bLy2bH2lBNlFC5c6e0laOWZ2Qdyq"
+    "vZZ95A6vRUztcTL2C0203vk5f39LBg"
+)
+PRIVATE_RECORD = "23751273"
 TOKEN_ENV = "BACTERIA_DATA_TOKEN"
 GENOMES = "genomes.zip"
 
@@ -81,8 +89,11 @@ class Dataset(BaseDataset):
                  f"feature_annotation_{self.mode}.csv",
                  f"condition_annotation_{self.mode}.csv"]
         raw = get_data_path("bacteria_raw")
-        record = PRIVATE_RECORD if self.mode == "full" else PUBLIC_RECORD
-        download_zenodo(record, names, raw, TOKEN_ENV)
+        if self.mode == "full":
+            download_zenodo(PRIVATE_RECORD, names, raw,
+                            os.environ.get(TOKEN_ENV))
+        else:
+            download_zenodo(PUBLIC_RECORD, names, raw, PUBLIC_TOKEN)
 
         frames, feat_df, cond_df = split_release(
             pd.read_parquet(raw / names[0]),
@@ -97,7 +108,7 @@ class Dataset(BaseDataset):
         zip_name = "genomes_debug.zip" if self.mode == "debug" else GENOMES
         if not all((genomes / f"{g}.gbff").exists()
                    for g in feat_df["genome_id"].unique()):
-            download_zenodo(PUBLIC_RECORD, [zip_name], raw, TOKEN_ENV)
+            download_zenodo(PUBLIC_RECORD, [zip_name], raw, PUBLIC_TOKEN)
             tmp = root.parent / "genomes.part"
             shutil.rmtree(tmp, ignore_errors=True)
             zipfile.ZipFile(raw / zip_name).extractall(tmp)
