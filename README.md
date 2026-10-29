@@ -57,7 +57,8 @@ benchopt run benchmark -d Simulated -s Constant
 python tools/create_bundle.py     # -> bundle.zip (upload to Codabench)
 ```
 
-The bundle ships only the config + programs + pages. The **benchmark** is baked
-into the Docker image (`/compet/benchmark`), and the **data** (including the
-sealed private split) is staged separately onto the compute worker at
-`$BENCHOPT_DATA_HOME` (`/app/data`), so neither enters the public artifact.
+The bundle ships the config, programs, pages and the **benchmark** (in the
+phase `input_data`, so a benchmark change needs no image rebuild). The
+**data** (including the sealed private split) is staged separately onto the
+compute worker at `$BENCHOPT_DATA_HOME` (`/app/data`), so it never enters the
+public artifact.

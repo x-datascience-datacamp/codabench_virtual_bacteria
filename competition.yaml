@@ -1,5 +1,5 @@
 version: 2
-title: "Bacterial Gene Expression — predict RNA-seq counts across species"
+title: "Datacamp 2026 - Bacterial Gene Expression — predict RNA-seq counts across species"
 description: >
   Predict RNA-seq expression counts for a gene x sample observation from its
   genome sequence, gene description and experimental (environment) metadata.
