@@ -1,7 +1,7 @@
 # Bacterial Gene Expression
 
 <p align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Logo_Institut_Pasteur_2025.png/500px-Logo_Institut_Pasteur_2025.png" alt="Institut Pasteur" height="80">
+  <a href="https://www.pasteur.fr/" target="_blank" rel="noopener noreferrer" title="Institut Pasteur"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Logo_Institut_Pasteur_2025.png/500px-Logo_Institut_Pasteur_2025.png" alt="Institut Pasteur" height="80"></a>
 </p>
 
 How strongly is a bacterial gene expressed under given conditions? From the
