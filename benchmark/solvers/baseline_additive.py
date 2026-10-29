@@ -98,7 +98,7 @@ class AdditiveModel:
         # Fitted counts on train
         beta_vec = np.array([self.cond_effects.get(c, 0.0) for c in cond_ids])
         log_pred = self.mu_0 + alpha_vec + beta_vec + offset
-        mu_fit = np.clip(np.expm1(np.clip(log_pred, -15.0, 15.0)), 1e-6, None)
+        mu_fit = np.maximum(np.expm1(np.clip(log_pred, -15.0, 15.0)), 0.5)
 
         # Calibrate dispersion sigma
         res = minimize_scalar(
@@ -147,7 +147,7 @@ class AdditiveModel:
         beta = np.array([self.cond_effects.get(c, 0.0) for c in cond_ids])
 
         log_pred = self.mu_0 + alpha + beta + offset
-        mu = np.clip(np.expm1(np.clip(log_pred, -15.0, 15.0)), 0.0, None)
+        mu = np.maximum(np.expm1(np.clip(log_pred, -15.0, 15.0)), 0.5)
         return np.column_stack([mu, np.full(n, self.sigma)])
 
 

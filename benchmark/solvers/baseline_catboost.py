@@ -90,7 +90,7 @@ class CatBoostNBModel:
             )
             cb.fit(X_tr, yt_tr)
             pred_val = cb.predict(X_val)
-            mu_val = np.clip(np.expm1(pred_val), 0.0, None)
+            mu_val = np.maximum(np.expm1(pred_val), 0.5)
 
             best_loss = float("inf")
             self.best_model = cb
@@ -133,7 +133,7 @@ class CatBoostNBModel:
         )
         hgb.fit(X_tr_enc, yt_tr)
         pred_val = hgb.predict(X_val_enc)
-        mu_val = np.clip(np.expm1(pred_val), 0.0, None)
+        mu_val = np.maximum(np.expm1(pred_val), 0.5)
 
         best_loss = float("inf")
         self.best_model = hgb
@@ -164,7 +164,7 @@ class CatBoostNBModel:
             X_enc = np.column_stack([X_cat, X[num_cols].to_numpy()])
             pred_log = self.best_model.predict(X_enc)
 
-        mu = np.clip(np.expm1(np.clip(pred_log, -15.0, 15.0)), 0.0, None)
+        mu = np.maximum(np.expm1(np.clip(pred_log, -15.0, 15.0)), 0.5)
         return np.column_stack([mu, np.full(n, self.best_r)])
 
 

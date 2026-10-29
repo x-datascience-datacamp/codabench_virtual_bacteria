@@ -17,7 +17,11 @@ experimental condition, from three sources of information:
 Your model outputs two numbers per observation, **`mu`** (expected count,
 ≥ 0) and **`sigma`** (Negative-Binomial dispersion, > 0). Submissions are
 ranked by the mean **Negative-Binomial negative log-likelihood** (lower is
-better); MAE and R² on `log1p(counts)` are shown alongside.
+better), with MAE and R² on `log1p(counts)` shown alongside. Each
+observation's loss is capped at 100 nats (a typical one costs about 7), so a
+single catastrophic prediction, such as `mu` near 0 for a highly expressed
+gene, cannot dominate a region. Keep `mu` away from 0 anyway: a capped
+observation still costs 100.
 
 ## The split
 

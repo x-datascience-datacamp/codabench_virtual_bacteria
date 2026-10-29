@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from benchmark_utils.nb_loss import (
-    nb_nll, log_mae, log_r2, check_predictions,
+    NLL_CAP, nb_nll, log_mae, log_r2, check_predictions,
 )
 
 
@@ -17,6 +17,14 @@ def test_nb_nll_matches_scipy():
     # scipy's nbinom(n=r, p=r/(r+mu)) has mean mu.
     expected = -np.mean(nbinom.logpmf(y, r, r / (r + mu)))
     assert nb_nll(y, mu, r) == pytest.approx(expected, rel=1e-10)
+
+
+def test_nb_nll_caps_each_observation():
+    # mu near 0 for a count of 4493 costs ~8e4 nats uncapped.
+    y = np.array([4493.0, 10.0])
+    mu = np.array([0.0, 10.0])
+    single = nb_nll(y[1:], mu[1:], 1.0)
+    assert nb_nll(y, mu, 1.0) == pytest.approx((NLL_CAP + single) / 2)
 
 
 def test_perfect_mu_gives_zero_error():

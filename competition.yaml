@@ -5,8 +5,9 @@ description: >
   genome sequence, gene description and experimental (environment) metadata.
   Submissions are code (a benchopt solver) that engineers features and trains
   on the platform, outputting (mu, sigma) per observation. Ranking is by mean
-  Negative-Binomial NLL, averaged over three held-out regions: a known gene
-  in a known run never seen together (A), a new gene (B) and a new run (C).
+  Negative-Binomial NLL (capped at 100 per observation), averaged over three
+  held-out regions: a known gene in a known run never seen together (A), a
+  new gene (B) and a new run (C).
   The leaderboard shows a public half of each region, and the final ranking
   uses the hidden private half. Powered by benchopt.
 image: logo.png

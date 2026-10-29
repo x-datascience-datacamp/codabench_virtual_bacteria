@@ -6,8 +6,11 @@ A submission predicts, per (gene x sample) observation, two numbers:
 - ``sigma`` : the NB dispersion / size parameter ``r``, > 0. The count variance
               is ``mu + mu**2 / sigma``; large sigma -> Poisson-like.
 
-The ranking metric is the mean NB negative log-likelihood (lower is better).
-MAE and R^2 on ``log1p(counts)`` are reported alongside for interpretability.
+The ranking metric is the mean NB negative log-likelihood (lower is better),
+each observation's loss capped at ``NLL_CAP`` so that one catastrophic
+prediction (e.g. ``mu`` near 0 for a highly expressed gene) cannot dominate a
+region. MAE and R^2 on ``log1p(counts)`` are reported alongside for
+interpretability.
 """
 
 import numpy as np
@@ -15,10 +18,13 @@ from scipy.special import gammaln
 from sklearn.metrics import mean_absolute_error, r2_score
 
 _EPS = 1e-8
+# Typical observations cost about 7 nats, 99% of them less than 50.
+NLL_CAP = 100.0
 
 
 def nb_nll(counts, mu, sigma):
-    """Mean Negative-Binomial negative log-likelihood (lower is better).
+    """Mean Negative-Binomial negative log-likelihood (lower is better), each
+    observation's loss capped at ``NLL_CAP``.
 
     Continuous Gamma relaxation that supports both integer and float counts:
         log_pmf = gammaln(y + r) - gammaln(r) - gammaln(y + 1)
@@ -37,7 +43,7 @@ def nb_nll(counts, mu, sigma):
         + y_log_mu
         - (y + r) * np.log(r + mu)
     )
-    return float(-np.mean(log_pmf))
+    return float(np.mean(np.minimum(-log_pmf, NLL_CAP)))
 
 
 def log_mae(counts, mu):
