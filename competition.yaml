@@ -21,6 +21,8 @@ show_detailed_results_in_leaderboard: False
 
 terms: pages/terms.md
 pages:
+  - title: Overview
+    file: pages/overview.md
   - title: Participation
     file: pages/participate.md
   - title: Timeline
