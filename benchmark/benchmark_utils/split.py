@@ -5,9 +5,12 @@ in training) or ``test_full`` (never seen). An observation's region follows
 from the pair, see ``REGION_TABLE``:
 
 - A: gene and run both seen in training, never together;
-- B: new run;
-- C: new gene;
+- B: new gene;
+- C: new run;
 - D: new gene in a new run.
+
+The letters follow the difficulty: the genome describes a new gene, while a
+new run only has its curated conditions.
 
 The evaluation release ships the real statuses. The student releases ship
 none, and ``simulate_status`` draws them with a fixed seed, so local scores
@@ -21,9 +24,9 @@ REGIONS = ("A", "B", "C", "D")
 STATUSES = ["train", "test_partial", "test_full"]
 REGION_TABLE = np.array([
     # run:  train    test_partial  test_full     # gene:
-    ["Train", "Train", "B"],                     # train
-    ["Train", "A", "B"],                         # test_partial
-    ["C", "C", "D"],                             # test_full
+    ["Train", "Train", "C"],                     # train
+    ["Train", "A", "C"],                         # test_partial
+    ["B", "B", "D"],                             # test_full
 ])
 STATUS_COLS = ["feature_status", "run_status", "status"]
 GENE_KEYS = ["genome_id", "feature_id"]

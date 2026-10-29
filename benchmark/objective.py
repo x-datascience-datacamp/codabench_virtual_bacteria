@@ -6,11 +6,10 @@ submission's model returns ``(mu, sigma)`` per observation; the ranking metric
 is the mean **Negative-Binomial NLL** (lower is better), with MAE / R^2 on
 ``log1p(counts)`` reported alongside.
 
-Evaluation runs on several held-out subsets — ``public`` (new gene x new
-condition on a *known* species) and ``private`` (a *held-out* species, further
-split into ``near`` / ``far`` groups). Metrics are emitted per subset as
-``objective_<metric>_<subset>``; the phase config maps them to leaderboard
-keys and hides the private columns.
+Evaluation runs on the held-out regions A to D (``benchmark_utils.split``).
+Metrics are emitted per region as ``objective_<metric>_<region>``, plus the
+``challenge`` mean over A, B and C. The phase config maps them to leaderboard
+keys.
 
 The solver always trains on the platform: ``get_objective`` hands it the
 train data and resources, and its ``fit`` runs before evaluation.

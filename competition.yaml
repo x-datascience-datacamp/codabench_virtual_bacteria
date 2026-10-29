@@ -5,9 +5,9 @@ description: >
   genome sequence, gene description and experimental (environment) metadata.
   Submissions are code (a benchopt solver) that engineers features and trains
   on the platform, outputting (mu, sigma) per observation; ranking is by mean
-  Negative-Binomial NLL. A public leaderboard scores a new-gene x
-  new-condition split on known species; the final ranking uses a hidden split
-  of held-out species (near and far in phylogeny). Powered by benchopt.
+  Negative-Binomial NLL, averaged over three held-out regions: a known gene
+  in a known run never seen together (A), a new gene (B) and a new run (C).
+  Powered by benchopt.
 image: logo.png
 registration_auto_approve: False
 
@@ -48,11 +48,10 @@ phases:
   - index: 0
     name: Competition
     description: >
-      Build, train and submit your model. The public columns score a
-      new-gene x new-condition split on known species; the final ranking uses
-      the hidden held-out-species split.
-    start: 2026-01-05 00:00:00
-    end: 2026-03-31 23:59:59
+      Build, train and submit your model. It is ranked by the NB-NLL averaged
+      over regions A, B and C.
+    start: 2026-10-29 00:00:00
+    end: 2027-02-01 00:00:00
     execution_time_limit: 3600
     max_submissions_per_day: 5
     # results.parquet and scores.json carry the hidden private metrics.
@@ -77,19 +76,19 @@ leaderboards:
         key: r2
         index: 2
         sorting: desc
-      - title: NB-NLL (C)
-        key: nb_nll_C
+      - title: "NB-NLL (A: unseen pair)"
+        key: nb_nll_A
         index: 3
         sorting: asc
-      - title: NB-NLL (A: new genes)
-        key: nb_nll_A
+      - title: "NB-NLL (B: new gene)"
+        key: nb_nll_B
         index: 4
         sorting: asc
-      - title: NB-NLL (B: new conditions)
-        key: nb_nll_B
+      - title: "NB-NLL (C: new run)"
+        key: nb_nll_C
         index: 5
         sorting: asc
-      - title: NB-NLL (D: double holdout)
+      - title: "NB-NLL (D: new gene, new run)"
         key: nb_nll_D
         index: 6
         sorting: asc

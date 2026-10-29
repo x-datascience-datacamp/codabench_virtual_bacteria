@@ -5,12 +5,14 @@
 Predict the RNA-seq expression **`counts`** of a gene under a given
 experimental condition, from three sources of information:
 
-1. **gene table** — one row per (gene × sample): genomic coordinates,
-   length, normalization offsets;
-2. **genome** — GenBank `.gb` files; the coordinates index into the DNA
-   sequence (e.g. the promoter region upstream of the gene);
-3. **sample metadata** (`samples.tsv`) — the environment: growth medium,
-   culture type, pH, temperature, growth rate.
+1. **gene table**: one row per gene, with its genomic coordinates, length
+   and normalization offset;
+2. **genome**: one GenBank `.gbff` file per genome, where the coordinates
+   index into the DNA sequence (e.g. the promoter region upstream of the
+   gene);
+3. **run table** (`samples_df`): one row per RNA-seq run, with its curated
+   experimental conditions (growth medium, temperature, pH, oxygen, growth
+   phase, perturbation), empty when unknown.
 
 Your model outputs two numbers per observation, **`mu`** (expected count,
 ≥ 0) and **`sigma`** (Negative-Binomial dispersion, > 0). Submissions are
@@ -19,11 +21,16 @@ better); MAE and R² on `log1p(counts)` are shown alongside.
 
 ## The split
 
-- **Public columns** (live feedback): a *new gene × new condition* split on
-  **known** species.
-- **Private / final ranking** (hidden): **held-out species**, reported as
-  *near* and *far* phylogenetic groups. Generalizing to distant species is
-  the challenge — do not overfit the public columns.
+Each gene and each run is either seen in training or held out. The test
+observations fall in four regions, from the easiest to the hardest:
+
+- **A**: a gene and a run both seen in training, but never together;
+- **B**: a new gene, in a run seen in training;
+- **C**: a new run (new experimental condition), for a gene seen in training;
+- **D**: a new gene in a new run.
+
+The ranking uses the NB-NLL averaged over A, B and C. D is shown for
+information.
 
 ## What you submit
 
@@ -63,8 +70,9 @@ benchopt run benchmark -d "BacterialExpression[mode=train]" \
     -s solution/submission.py
 ```
 
-The number you get locally on the public split is the number the leaderboard
-shows — the benchmark you run *is* the benchmark the server runs.
+Locally, the regions are drawn from the training data, so your scores follow
+the same protocol as the leaderboard. The benchmark you run *is* the
+benchmark the server runs.
 
 ## Ideas to improve the baseline
 

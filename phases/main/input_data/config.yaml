@@ -9,7 +9,7 @@ scoring:
     nb_nll: objective_nb_nll_challenge
     mae: objective_mae_challenge
     r2: objective_r2_challenge
-    nb_nll_C: objective_nb_nll_C
     nb_nll_A: objective_nb_nll_A
     nb_nll_B: objective_nb_nll_B
+    nb_nll_C: objective_nb_nll_C
     nb_nll_D: objective_nb_nll_D
