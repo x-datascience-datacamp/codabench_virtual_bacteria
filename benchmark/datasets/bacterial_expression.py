@@ -1,10 +1,11 @@
 """Multi-species bacterial transcriptomics dataset, A/B/C/D regions.
 
-Each observation's ``status`` puts it in training (``Train``) or in a held-out
-region of the evaluation (``eval_*``) or test (``test_*``) split. The two
-splits are drawn with the same criteria:
+Each observation's ``status`` puts it in training (``Train``), in the
+evaluation (``eval_*``) or in the test (``test_*``) split. A held-out
+observation's region follows from whether its gene and its run are seen in
+the data the model fits on:
 
-- A: gene and run both seen in training, never together;
+- A: gene and run both seen, never together;
 - B: new run;
 - C: new gene;
 - D: new gene in a new run.
@@ -124,14 +125,20 @@ class Dataset(BaseDataset):
         obs = attach(obs, feat_df, GENE_KEYS, ["log_length_ratio"])
         obs = attach(obs, cond_df, RUN_KEYS, ["log_size_factor"])
 
-        # Locally the eval regions score the model; on the platform it also
-        # fits on them and the test regions score it.
+        # Locally the eval split scores the model; on the platform it also
+        # fits on it and the test split scores it.
         held_out = "test" if self.mode == "full" else "eval"
         parts = {"Train": "train",
-                 **{f"{held_out}_{r}": r for r in REGIONS}}
+                 **{f"{held_out}_{r}": "held" for r in REGIONS}}
         if self.mode == "full":
             parts.update({f"eval_{r}": "train" for r in REGIONS})
-        part = obs.pop("status").map(parts)
+        part = obs.pop("status").map(parts).to_numpy()
+        fit = part == "train"
+        gene, run = pair_codes(obs, GENE_KEYS), pair_codes(obs, RUN_KEYS)
+        new_gene, new_run = ~np.isin(gene, gene[fit]), ~np.isin(run, run[fit])
+        part = np.where(part == "held", np.select(
+            [new_gene & new_run, new_gene, new_run], ["D", "C", "B"], "A"),
+            part)
 
         root = get_data_path("bacteria") / self.mode
         root.mkdir(parents=True, exist_ok=True)
@@ -209,6 +216,13 @@ def attach(obs, table, keys, cols):
     # observations.
     return obs.merge(table.dropna(subset=keys), on=keys, how="left",
                      validate="many_to_one")
+
+
+def pair_codes(df, keys):
+    """One integer per row for the pair of categorical ``keys``."""
+    first, second = (df[k].cat.codes.to_numpy().astype(np.int64)
+                     for k in keys)
+    return first * (len(df[keys[1]].cat.categories) + 1) + second
 
 
 def is_private(df, region):
