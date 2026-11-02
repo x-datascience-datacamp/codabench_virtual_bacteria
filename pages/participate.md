@@ -34,9 +34,7 @@ test observation falls in one of four regions:
 - **D**: a new gene in a new run.
 
 The eval and test splits are drawn with the same criteria. You get the eval
-counts, to score your model locally. The test counts stay on the platform,
-where training also includes the eval observations: there, "seen in
-training" means seen in train or eval.
+counts, to score your model locally. The test counts stay on the platform.
 
 The ranking uses the NB-NLL averaged over A, B and C. D is shown for
 information.
