@@ -9,6 +9,10 @@ splits are drawn with the same criteria:
 - C: new gene;
 - D: new gene in a new run.
 
+"Seen" means seen in the data the model fits on. ``prepare`` drops the
+held-out observations whose region this data contradicts, such as an A
+observation whose gene it never contains.
+
 ``prepare`` downloads the release files of ``mode`` and the genomes from
 Zenodo, then writes the regions::
 
@@ -131,7 +135,13 @@ class Dataset(BaseDataset):
                  **{f"{held_out}_{r}": r for r in REGIONS}}
         if self.mode == "full":
             parts.update({f"eval_{r}": "train" for r in REGIONS})
-        part = obs.pop("status").map(parts)
+        part = obs.pop("status").map(parts).to_numpy()
+        fit = part == "train"
+        gene, run = pair_codes(obs, GENE_KEYS), pair_codes(obs, RUN_KEYS)
+        new_gene, new_run = ~np.isin(gene, gene[fit]), ~np.isin(run, run[fit])
+        region = np.select([new_gene & new_run, new_gene, new_run],
+                           ["D", "C", "B"], "A")
+        part = np.where(fit | (part == region), part, None)
 
         root = get_data_path("bacteria") / self.mode
         root.mkdir(parents=True, exist_ok=True)
@@ -209,6 +219,13 @@ def attach(obs, table, keys, cols):
     # observations.
     return obs.merge(table.dropna(subset=keys), on=keys, how="left",
                      validate="many_to_one")
+
+
+def pair_codes(df, keys):
+    """One integer per row for the pair of categorical ``keys``."""
+    first, second = (df[k].cat.codes.to_numpy().astype(np.int64)
+                     for k in keys)
+    return first * (len(df[keys[1]].cat.categories) + 1) + second
 
 
 def is_private(df, region):
