@@ -25,21 +25,23 @@ observation still costs 100.
 
 ## The split
 
-Each gene and each run is either seen in training or held out. The test
-observations fall in four regions, from the easiest to the hardest:
+The data has three splits: **train**, **eval** and **test**. Each eval or
+test observation falls in one of four regions:
 
 - **A**: a gene and a run both seen in training, but never together;
-- **B**: a new gene, in a run seen in training;
-- **C**: a new run (new experimental condition), for a gene seen in training;
+- **B**: a new run (new experimental condition), for a gene seen in training;
+- **C**: a new gene, in a run seen in training;
 - **D**: a new gene in a new run.
+
+The eval and test splits are drawn with the same criteria. You get the eval
+counts, to score your model locally. The test counts stay on the platform.
 
 The ranking uses the NB-NLL averaged over A, B and C. D is shown for
 information.
 
-Each region is split in two halves: half of its observations (A), new genes
-(B, D) or new runs (C) go to a **public** half, the others to a **private**
-half. The
-leaderboard shows your scores on the public half. The final ranking uses the
+Each test region is split in two halves: half of its observations (A), new
+runs (B) or new genes (C, D) go to a **public** half, the others to a
+**private** half. The leaderboard shows your scores on the public half. The final ranking uses the
 private half, hidden until the end of the challenge, so tuning your model to
 the leaderboard does not pay.
 
@@ -67,7 +69,8 @@ class Solver(GeneCompetSolver):
 Your trained model must expose
 `predict(test_df, samples_df, genomes_dir) -> ndarray (N, 2)` returning
 `(mu, sigma)`. The platform **trains your code** on identical hardware, then
-evaluates it. See `solution/submission.py` for a working baseline
+evaluates it. There, `fit` gets the train **and** the eval observations, so
+your training must adapt to more data than in your local runs. See `solution/submission.py` for a working baseline
 (feature builder + Ridge regression + dispersion calibration).
 
 ## The compute
@@ -83,15 +86,15 @@ busy times.
 
 ```bash
 pip install -r requirements.txt
-# downloads the training data, then scores on simulated A/B/C/D regions
-# (mode=debug for a small subsample)
+# downloads the train and eval data, fits on train and scores on the
+# eval regions A/B/C/D (mode=debug for a small subsample)
 benchopt prepare benchmark -d "BacterialExpression[mode=train]"
 benchopt run benchmark -d "BacterialExpression[mode=train]" \
     -s solution/submission.py
 ```
 
-Locally, the regions are drawn from the training data, so your scores follow
-the same protocol as the leaderboard. The benchmark you run *is* the
+Locally, the eval regions follow the same protocol as the test regions of
+the leaderboard. The benchmark you run *is* the
 benchmark the server runs.
 
 ## Ideas to improve the baseline

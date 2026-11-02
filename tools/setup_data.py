@@ -1,21 +1,24 @@
 """Build the data release files read by the ``BacterialExpression`` dataset.
 
-Release files, for each ``mode`` in ``debug`` / ``train`` / ``full``::
+Release files::
 
-    read_count_<mode>.parquet
-    feature_annotation_<mode>.csv
-    condition_annotation_<mode>.csv
+    read_count_<mode>.parquet            mode in debug / train / full
+    feature_annotation[_debug].csv
+    condition_annotation[_debug].csv
 
 and the GenBank genomes, ``genomes.zip`` and ``genomes_debug.zip`` (the
 ``debug`` genome only).
 
 ``--release SRC`` converts the organizers' files found in ``SRC``
-(``read_count_<mode>.csv``, the two annotation CSVs, ``genomes.zip``, the
-curated conditions ``experiment.zip`` and ``run_to_experiment.csv``) into
-``OUT/public`` (``debug`` and ``train``, split statuses dropped, the genomes
-and ``experiment.zip``) and ``OUT/private`` (``full``, with the real statuses),
-ready to upload to the public and the restricted Zenodo records. Read counts
-are streamed, so the multi-GB tables never sit in memory.
+(``read_count_{debug,public,private}.csv.gz``, ``feature_annotation.csv``,
+``condition_annotation.csv``, ``genomes.zip``, the curated conditions
+``experiment.zip`` and ``run_to_experiment.csv``) into ``OUT/public`` (the
+``debug`` and ``train`` counts without the test rows, the annotations, the
+genomes and ``experiment.zip``) and ``OUT/private`` (the ``full`` counts),
+ready to upload to the public and the restricted Zenodo records. Each
+observation keeps only its region ``status`` (``Train``, ``eval_<region>``,
+``test_<region>``). Read counts are streamed, so the multi-GB tables never
+sit in memory.
 
 ``--demo`` writes a tiny synthetic ``debug`` and ``full`` release, genomes
 included, straight into the benchmark data folder, so ``prepare`` runs
@@ -25,7 +28,6 @@ offline (CI, smoke tests).
 import argparse
 import json
 import shutil
-import sys
 import zipfile
 from pathlib import Path
 
@@ -35,11 +37,6 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pv
 import pyarrow.parquet as pq
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
-from benchmark_utils.split import (  # noqa: E402
-    STATUS_COLS, assign_regions, simulate_status,
-)
 
 DEMO_DIR = Path("benchmark/data/bacteria_raw")
 # Run table column: (section, field) of an experiment in experiment.zip.
@@ -58,21 +55,29 @@ CONDITION_FIELDS = {
     "perturbation_category": ("perturbation", "perturbation_category"),
     "perturbation_compound": ("perturbation", "stressor_or_compound"),
 }
-RELEASES = {"debug": "public", "train": "public", "full": "private"}
+# Release mode: (organizers' file, record).
+RELEASES = {"debug": ("debug", "public"), "train": ("public", "public"),
+            "full": ("private", "private")}
+COUNT_COLS = ["species", "genome_id", "feature_id", "run_accession",
+              "readcount", "status"]
 
 
-def convert_read_counts(src, dest, keep_status):
+def convert_read_counts(src, dest, keep_test):
     """Stream a read-count CSV into a zstd Parquet file.
 
     String columns are dictionary-encoded, so they load as categories.
     """
-    reader = pv.open_csv(src, read_options=pv.ReadOptions(block_size=1 << 26))
-    drop = [] if keep_status else STATUS_COLS
+    reader = pv.open_csv(
+        src, read_options=pv.ReadOptions(block_size=1 << 26),
+        convert_options=pv.ConvertOptions(
+            include_columns=COUNT_COLS,
+            column_types={"readcount": pa.float64()}))
     writer = None
     for batch in reader:
         table = pa.Table.from_batches([batch])
-        table = table.drop_columns(
-            [c for c in drop if c in table.schema.names])
+        if not keep_test:
+            table = table.filter(
+                pc.invert(pc.starts_with(table["status"], "test_")))
         table = pa.table({
             name: pc.dictionary_encode(col) if pa.types.is_string(col.type)
             else col for name, col in zip(table.column_names, table.columns)
@@ -84,21 +89,28 @@ def convert_read_counts(src, dest, keep_status):
 
 
 def make_release(src, out):
-    for mode, access in RELEASES.items():
-        keep_status = access == "private"
+    for mode, (name, access) in RELEASES.items():
         dest = out / access
         dest.mkdir(parents=True, exist_ok=True)
-        for kind in ("feature_annotation", "condition_annotation"):
-            df = pd.read_csv(src / f"{kind}_{mode}.csv")
-            if kind == "condition_annotation":
-                df = add_conditions(df, src)
-            if not keep_status:
-                df = df.drop(columns=STATUS_COLS, errors="ignore")
-            df.to_csv(dest / f"{kind}_{mode}.csv", index=False)
-        convert_read_counts(src / f"read_count_{mode}.csv",
-                            dest / f"read_count_{mode}.parquet", keep_status)
-        print(f"[setup_data] wrote {mode} release to {dest}")
-    write_genomes(src, out / "public")
+        convert_read_counts(src / f"read_count_{name}.csv.gz",
+                            dest / f"read_count_{mode}.parquet",
+                            keep_test=access == "private")
+        print(f"[setup_data] wrote {mode} counts to {dest}")
+    feat_df = pd.read_csv(src / "feature_annotation.csv").drop(
+        columns="status")
+    cond_df = add_conditions(
+        pd.read_csv(src / "condition_annotation.csv").drop(columns="status"),
+        src)
+    debug_ids = pd.read_parquet(out / "public" / "read_count_debug.parquet",
+                                columns=["genome_id"])["genome_id"].unique()
+    for suffix, keep in (("", slice(None)),
+                         ("_debug", cond_df["genome_id"].isin(debug_ids))):
+        cond_df[keep].to_csv(
+            out / "public" / f"condition_annotation{suffix}.csv", index=False)
+    feat_df[feat_df["genome_id"].isin(debug_ids)].to_csv(
+        out / "public" / "feature_annotation_debug.csv", index=False)
+    feat_df.to_csv(out / "public" / "feature_annotation.csv", index=False)
+    write_genomes(src, out / "public", debug_ids)
     shutil.copy(src / "experiment.zip", out / "public")
 
 
@@ -136,11 +148,9 @@ def add_conditions(cond_df, src):
                          validate="one_to_one")
 
 
-def write_genomes(src, dest):
-    """Copy ``genomes.zip`` and extract the debug genomes to their own zip."""
+def write_genomes(src, dest, ids):
+    """Copy ``genomes.zip`` and extract the ``ids`` genomes to a zip."""
     shutil.copy(src / "genomes.zip", dest)
-    ids = pd.read_csv(src / "feature_annotation_debug.csv",
-                      usecols=["genome_id"])["genome_id"].unique()
     with zipfile.ZipFile(src / "genomes.zip") as full, zipfile.ZipFile(
             dest / "genomes_debug.zip", "w", zipfile.ZIP_DEFLATED) as z:
         for gid in ids:
@@ -174,16 +184,21 @@ def make_demo(out, seed=0):
     mu = np.exp(log_mu + rng.normal(0, 0.2, len(obs)))
     obs["readcount"] = np.round(
         np.maximum(0.0, rng.normal(mu, np.sqrt(mu + 0.2 * mu**2))), 1)
-    obs = obs[["species", "genome_id", "feature_id", "run_accession",
-               "readcount"]]
 
-    # Real-like statuses for the full release, drawn with another seed
-    # than the simulated debug split.
-    feat_g = simulate_status(feat_df, seed=seed + 1)
-    cond_g = simulate_status(cond_df, seed=seed + 1)
-    keys = ["genome_id", "feature_id", "run_accession"]
-    obs_g = assign_regions(obs.astype({k: "category" for k in keys}),
-                           feat_g, cond_g)
+    # Held-out level of each gene and run (0 train, 1 eval, 2 test), and of
+    # each pair of seen ones (region A).
+    p = [0.7, 0.15, 0.15]
+    gene = pd.Series(rng.choice(3, len(feat_df), p=p), feat_df["feature_id"])
+    run = pd.Series(rng.choice(3, len(cond_df), p=p), cond_df["run_accession"])
+    g = gene[obs["feature_id"]].to_numpy()
+    r = run[obs["run_accession"]].to_numpy()
+    top = np.maximum(g, r)
+    level = np.where(top > 0, top, rng.choice(3, len(obs), p=p))
+    letter = np.select([top == 0, g < top, r < top], ["A", "B", "C"], "D")
+    obs["status"] = np.where(
+        level == 0, "Train",
+        np.array(["", "eval_", "test_"])[level] + letter)
+    obs = obs[COUNT_COLS]
 
     out.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out / "genomes.zip", "w") as z:
@@ -194,13 +209,14 @@ def make_demo(out, seed=0):
                        "linear   BCT 01-JAN-2026\n"
                        f"ORIGIN\n        1 {seq}\n//\n")
     shutil.copy(out / "genomes.zip", out / "genomes_debug.zip")
-    for mode, (o, f, c) in {"debug": (obs, feat_df, cond_df),
-                            "full": (obs_g, feat_g, cond_g)}.items():
-        o.to_parquet(out / f"read_count_{mode}.parquet")
-        f.to_csv(out / f"feature_annotation_{mode}.csv", index=False)
-        c.to_csv(out / f"condition_annotation_{mode}.csv", index=False)
+    obs[~obs["status"].str.startswith("test_")].to_parquet(
+        out / "read_count_debug.parquet")
+    obs.to_parquet(out / "read_count_full.parquet")
+    for suffix in ("", "_debug"):
+        feat_df.to_csv(out / f"feature_annotation{suffix}.csv", index=False)
+        cond_df.to_csv(out / f"condition_annotation{suffix}.csv", index=False)
     print(f"[setup_data] wrote demo release to {out}, regions: "
-          f"{obs_g['status'].value_counts().to_dict()}")
+          f"{obs['status'].value_counts().to_dict()}")
 
 
 def main():

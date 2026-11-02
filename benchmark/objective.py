@@ -6,8 +6,9 @@ submission's model returns ``(mu, sigma)`` per observation; the ranking metric
 is the mean **Negative-Binomial NLL** (lower is better), with MAE / R^2 on
 ``log1p(counts)`` reported alongside.
 
-Evaluation runs on the held-out regions A to D (``benchmark_utils.split``),
-each halved into a public part and a hidden private part. Metrics are emitted
+Evaluation runs on the held-out regions A to D (``datasets/
+bacterial_expression.py``), on the platform each halved into a public part
+and a hidden private part. Metrics are emitted
 per region as ``objective_<metric>_<region>`` (public) and
 ``objective_<metric>_<region>_private``, plus the ``challenge`` mean over A,
 B and C of each half. The phase config maps them to leaderboard keys.

@@ -7,7 +7,7 @@ description: >
   on the platform, outputting (mu, sigma) per observation. Ranking is by mean
   Negative-Binomial NLL (capped at 100 per observation), averaged over three
   held-out regions: a known gene in a known run never seen together (A), a
-  new gene (B) and a new run (C).
+  new run (B) and a new gene (C).
   The leaderboard shows a public half of each region, and the final ranking
   uses the hidden private half. Powered by benchopt.
 image: logo.png
@@ -85,11 +85,11 @@ leaderboards:
         key: nb_nll_A
         index: 3
         sorting: asc
-      - title: "NB-NLL (B: new gene)"
+      - title: "NB-NLL (B: new run)"
         key: nb_nll_B
         index: 4
         sorting: asc
-      - title: "NB-NLL (C: new run)"
+      - title: "NB-NLL (C: new gene)"
         key: nb_nll_C
         index: 5
         sorting: asc

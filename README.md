@@ -14,10 +14,10 @@ The self-contained benchopt benchmark — run it directly with
 `benchopt run benchmark`:
 
 - `benchmark/objective.py` — the task + metric (Negative-Binomial NLL, MAE/R²)
-  on the public and hidden private (near/far species) splits; always trains.
+  per region, on the public and hidden private halves; always trains.
 - `benchmark/datasets/` — `simulated.py` (zero-dependency smoke test) and
   `bacterial_expression.py` (downloads the real data from Zenodo in
-  `prepare` and splits it into train / A / B / C / D).
+  `prepare` and writes its train / A / B / C / D regions).
 - `benchmark/solvers/` — `constant.py` (floor), `baseline_nn.py` (NN).
 - `benchmark/benchmark_utils/` — the metric, the `GeneCompetSolver` submission
   contract, feature engineering, shared helpers.
@@ -32,7 +32,7 @@ The self-contained benchopt benchmark — run it directly with
   run config + a `scoring` column map).
 - `pages/`, `solution/submission.py` — participant pages and the sample
   submission.
-- `tools/` — `setup_data.py` (build the split), `Dockerfile`, `requirements.txt`,
+- `tools/` — `setup_data.py` (build the release), `Dockerfile`, `requirements.txt`,
   `create_bundle.py`, `run_docker.py`.
 
 ## Quickstart
@@ -40,8 +40,8 @@ The self-contained benchopt benchmark — run it directly with
 ```bash
 pip install -r requirements.txt
 
-# download the data, then score on regions simulated from training
-# (mode=train for all the training data)
+# download the data, fit on train and score on the eval regions
+# (mode=train for all the public data)
 benchopt prepare benchmark -d "BacterialExpression[mode=debug]"
 benchopt run benchmark -d "BacterialExpression[mode=debug]" \
     -s solution/submission.py

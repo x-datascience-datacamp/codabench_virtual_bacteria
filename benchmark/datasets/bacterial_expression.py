@@ -1,28 +1,36 @@
-"""Multi-species bacterial transcriptomics dataset, A/B/C/D test regions.
+"""Multi-species bacterial transcriptomics dataset, A/B/C/D regions.
 
-Each region is scored on a public and a hidden private half
-(``benchmark_utils.split.is_private``).
+Each observation's ``status`` puts it in training (``Train``) or in a held-out
+region of the evaluation (``eval_*``) or test (``test_*``) split. The two
+splits are drawn with the same criteria:
+
+- A: gene and run both seen in training, never together;
+- B: new run;
+- C: new gene;
+- D: new gene in a new run.
 
 ``prepare`` downloads the release files of ``mode`` and the genomes from
-Zenodo, then writes the train / A / B / C / D split
-(``benchmark_utils.split``)::
+Zenodo, then writes the regions::
 
     benchopt prepare benchmark -d "BacterialExpression[mode=train]"
 
-- ``debug``: small subsample, regions simulated from the training data;
-- ``train``: all training data, regions simulated the same way;
-- ``full``: evaluation data with the real regions. Its record is restricted:
-  set ``BACTERIA_DATA_TOKEN`` to download it.
+- ``debug``: small subsample (one genome), scored on its eval regions;
+- ``train``: all the public data, fits on ``Train``, scored on the eval
+  regions;
+- ``full``: fits on ``Train`` and eval, scored on the test regions, each
+  halved into a public and a hidden private part (``is_private``). Its
+  record is restricted: set ``BACTERIA_DATA_TOKEN`` to download it.
 
 Raw release files go to ``get_data_path("bacteria_raw")``::
 
-    read_count_<mode>.parquet          (gene x run) observations, ``readcount``
-    feature_annotation_<mode>.csv      gene table, ``log_length_ratio``
-    condition_annotation_<mode>.csv    run table, ``log_size_factor`` and
-                                       the curated conditions (medium,
-                                       temperature, pH, perturbation...)
-    genomes.zip                        ``genomes/<genome_id>.gbff``
-    genomes_debug.zip                  the ``debug`` genome only
+    read_count_<mode>.parquet           observations, ``readcount``
+                                        and ``status``
+    feature_annotation[_debug].csv      gene table, ``log_length_ratio``
+    condition_annotation[_debug].csv    run table, ``log_size_factor`` and
+                                        the curated conditions (medium,
+                                        temperature, pH, perturbation...)
+    genomes.zip                         ``genomes/<genome_id>.gbff``
+    genomes_debug.zip                   the ``debug`` genome only
 
 The prepared layout, under
 ``get_data_path("bacteria") / mode`` (on the competition worker the image sets
@@ -42,12 +50,12 @@ import os
 import shutil
 import zipfile
 
+import numpy as np
 import pandas as pd
 from benchopt import BaseDataset
 from benchopt.config import get_data_path
 
 from benchmark_utils.download import download_zenodo
-from benchmark_utils.split import REGIONS, is_private, split_release
 
 # Public record: debug + train releases, genomes and curated conditions,
 # read with the token of its share link while it is a draft. Restricted
@@ -62,6 +70,14 @@ PUBLIC_TOKEN = (
 PRIVATE_RECORD = "23751273"
 TOKEN_ENV = "BACTERIA_DATA_TOKEN"
 GENOMES = "genomes.zip"
+
+REGIONS = ("A", "B", "C", "D")
+GENE_KEYS = ["genome_id", "feature_id"]
+RUN_KEYS = ["genome_id", "run_accession"]
+# Private halves: by observation for A, by run for B, by gene for C and D, so
+# a new gene falls in the same half in C and D.
+HALF_KEYS = {"A": GENE_KEYS + ["run_accession"], "B": RUN_KEYS,
+             "C": GENE_KEYS, "D": GENE_KEYS}
 
 ID_FEATURES = ["genome_id", "feature_id", "run_accession"]
 NUMERIC_FEATURES = ["log_length_ratio", "log_size_factor"]
@@ -88,22 +104,35 @@ class Dataset(BaseDataset):
     }
 
     def prepare(self):
-        names = [f"read_count_{self.mode}.parquet",
-                 f"feature_annotation_{self.mode}.csv",
-                 f"condition_annotation_{self.mode}.csv"]
         raw = get_data_path("bacteria_raw")
+        suffix = "_debug" if self.mode == "debug" else ""
+        feat_name = f"feature_annotation{suffix}.csv"
+        cond_name = f"condition_annotation{suffix}.csv"
+        counts = f"read_count_{self.mode}.parquet"
+        download_zenodo(PUBLIC_RECORD, [feat_name, cond_name], raw,
+                        PUBLIC_TOKEN)
         if self.mode == "full":
-            download_zenodo(PRIVATE_RECORD, names, raw,
+            download_zenodo(PRIVATE_RECORD, [counts], raw,
                             os.environ.get(TOKEN_ENV))
         else:
-            download_zenodo(PUBLIC_RECORD, names, raw, PUBLIC_TOKEN)
+            download_zenodo(PUBLIC_RECORD, [counts], raw, PUBLIC_TOKEN)
 
-        frames, feat_df, cond_df = split_release(
-            pd.read_parquet(raw / names[0]),
-            pd.read_csv(raw / names[1]),
-            pd.read_csv(raw / names[2]),
-            simulate=self.mode != "full",
-        )
+        feat_df = pd.read_csv(raw / feat_name)
+        cond_df = pd.read_csv(raw / cond_name)
+        obs = pd.read_parquet(raw / counts).astype(
+            {k: "category" for k in GENE_KEYS + RUN_KEYS})
+        obs = attach(obs, feat_df, GENE_KEYS, ["log_length_ratio"])
+        obs = attach(obs, cond_df, RUN_KEYS, ["log_size_factor"])
+
+        # Locally the eval regions score the model; on the platform it also
+        # fits on them and the test regions score it.
+        held_out = "test" if self.mode == "full" else "eval"
+        parts = {"Train": "train",
+                 **{f"{held_out}_{r}": r for r in REGIONS}}
+        if self.mode == "full":
+            parts.update({f"eval_{r}": "train" for r in REGIONS})
+        part = obs.pop("status").map(parts)
+
         root = get_data_path("bacteria") / self.mode
         root.mkdir(parents=True, exist_ok=True)
         genomes = root.parent / "genomes"
@@ -121,8 +150,9 @@ class Dataset(BaseDataset):
             shutil.rmtree(tmp)
         feat_df.to_csv(root / "feature_annotation.csv", index=False)
         cond_df.to_csv(root / "condition_annotation.csv", index=False)
-        for name, df in frames.items():
-            df.to_parquet(root / f"{name}.parquet")
+        for name in ("train",) + REGIONS:
+            obs[part == name].reset_index(drop=True).to_parquet(
+                root / f"{name}.parquet")
 
     def get_data(self):
         root = get_data_path("bacteria") / self.mode
@@ -135,14 +165,17 @@ class Dataset(BaseDataset):
                 f"\"BacterialExpression[mode={self.mode}]\" --force`."
             )
 
-        # The public half of each region under its name, the private one
-        # as ``<region>_private``.
+        # On the platform, the public half of each region under its name,
+        # the private one as ``<region>_private``.
         test_sets = {}
         for name in REGIONS:
             df = pd.read_parquet(root / f"{name}.parquet")
-            private = is_private(df, name)
-            for key, part in ((name, df[~private]),
-                              (f"{name}_private", df[private])):
+            private = (is_private(df, name) if self.mode == "full"
+                       else np.zeros(len(df), dtype=bool))
+            halves = [(name, df[~private])]
+            if private.any():
+                halves.append((f"{name}_private", df[private]))
+            for key, part in halves:
                 part = part.reset_index(drop=True)
                 test_sets[key] = (part.drop(columns="readcount"),
                                   part["readcount"].to_numpy(dtype=float))
@@ -163,3 +196,22 @@ class Dataset(BaseDataset):
                 c for c in cond_df.columns
                 if c not in ID_FEATURES + NUMERIC_FEATURES],
         )
+
+
+def attach(obs, table, keys, cols):
+    """Left-join ``cols`` of ``table`` onto ``obs``, matching category codes.
+
+    Casting the keys to the observation dtypes keeps the join on integer codes
+    instead of strings, which matters for the ~8e7-row releases.
+    """
+    table = table[keys + cols].astype({k: obs[k].dtype for k in keys})
+    # Keys absent from obs cast to NaN. A duplicated key would duplicate its
+    # observations.
+    return obs.merge(table.dropna(subset=keys), on=keys, how="left",
+                     validate="many_to_one")
+
+
+def is_private(df, region):
+    """Whether each observation of ``region`` falls in its private half."""
+    keys = df[HALF_KEYS[region]]
+    return pd.util.hash_pandas_object(keys, index=False).to_numpy() % 2 == 1
