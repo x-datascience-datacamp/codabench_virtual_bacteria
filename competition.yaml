@@ -29,7 +29,8 @@ pages:
     file: pages/participate.md
   - title: Timeline
     file: pages/timeline.md
-
+  - title: Project Details
+    file: pages/project_details/bacterial_transcriptomics.md
 tasks:
   - index: 0
     name: Gene expression
