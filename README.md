@@ -36,6 +36,34 @@ The self-contained benchopt benchmark — run it directly with
 - `tools/` — `setup_data.py` (build the release), `Dockerfile`, `requirements.txt`,
   `create_bundle.py`, `run_docker.py`.
 
+## Get the data
+
+One command downloads all the public data from Zenodo, about 1.1 GB: the
+train and eval counts, the gene and run annotations, and the genomes.
+
+```bash
+benchopt prepare benchmark -d "BacterialExpression[mode=train]"
+```
+
+The data goes to `benchmark/data/`, or to `$BENCHOPT_DATA_HOME`.
+`mode=debug` downloads a small E. coli subset. The test counts stay on the
+platform.
+
+## Quickstart
+
+```bash
+pip install -r requirements.txt
+
+# download the small subset, fit on train and score on the eval regions
+benchopt prepare benchmark -d "BacterialExpression[mode=debug]"
+benchopt run benchmark -d "BacterialExpression[mode=debug]" \
+    -s solution/submission.py
+
+# design-level tests + zero-dependency smoke test
+benchopt test benchmark --skip-install
+benchopt run benchmark -d Simulated -s Constant
+```
+
 ## Build the Codabench bundle
 
 ```bash

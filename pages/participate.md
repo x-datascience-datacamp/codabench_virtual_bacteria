@@ -84,13 +84,24 @@ must fit in **1 hour**, or the submission fails. The three Datacamp
 challenges share these machines, so a submission may wait in the queue at
 busy times.
 
-## Run it locally — same code as the server
+## Get the data
+
+One command downloads all the public data from Zenodo, about 1.1 GB: the
+train and eval counts, the gene and run annotations, and the genomes.
 
 ```bash
 pip install -r requirements.txt
-# downloads the train and eval data, fits on train and scores on the
-# eval regions A/B/C/D (mode=debug for a small subsample)
 benchopt prepare benchmark -d "BacterialExpression[mode=train]"
+```
+
+The data goes to `benchmark/data/`, or to the folder `BENCHOPT_DATA_HOME`
+names. `mode=debug` downloads a small E. coli subset instead, to try things
+quickly. The test counts are not public: they stay on the platform.
+
+## Run it locally — same code as the server
+
+```bash
+# fits on train and scores on the eval regions A/B/C/D
 benchopt run benchmark -d "BacterialExpression[mode=train]" \
     -s solution/submission.py
 ```
