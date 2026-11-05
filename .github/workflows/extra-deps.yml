@@ -14,6 +14,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Free disk space
         run: |
@@ -21,13 +24,14 @@ jobs:
           sudo rm -rf /usr/local/.ghcup || true
       - uses: actions/checkout@v4
       - name: Build tools/Dockerfile.extra on the running image
-        run: docker build -f tools/Dockerfile.extra -t extra-deps-test .
+        run: |
+          docker build -f tools/Dockerfile.extra -t extra-deps-test \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} .
       - name: Push as the competition image
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        env:
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           image=$(sed -n 's/^docker_image: *//p' competition.yaml)
-          echo "$DOCKERHUB_TOKEN" | docker login -u "${image%%/*}" --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker tag extra-deps-test "$image"
           docker push "$image"
